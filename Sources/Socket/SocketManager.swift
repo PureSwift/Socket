@@ -14,9 +14,13 @@ internal final class SocketManager {
     
     static let shared = SocketManager()
     
+    weak var delegate: SocketManagerDelegate?
+    
     private var didSetup = false
     
-    private var sockets = [SocketState]()
+    private var sockets = [FileDescriptor: SocketState]()
+    
+    private var pollDescriptors = [FileDescriptor.Poll]()
     
     private var runloop: CFRunLoop?
     
@@ -35,35 +39,36 @@ internal final class SocketManager {
         }
     }
     
-    func add(_ socket: Socket) {
-        let id = ObjectIdentifier(socket)
-        let state = SocketState(
-            id: id,
-            fileDescriptor: socket.fileDescriptor,
-            socket: .passUnretained(socket)
-        )
+    func contains(_ fileDescriptor: FileDescriptor) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return sockets.keys.contains(fileDescriptor)
+    }
+    
+    func add(_ fileDescriptor: FileDescriptor) {
         // append lock
         lock.lock()
-        sockets.append(state)
+        if sockets[fileDescriptor] == nil {
+            sockets[fileDescriptor] = SocketState(
+                fileDescriptor: fileDescriptor
+            )
+        }
+        updatePollDescriptors()
         lock.unlock()
     }
     
-    func remove(_ socket: Socket) {
-        let id = ObjectIdentifier(socket)
+    func remove(_ fileDescriptor: FileDescriptor) {
         lock.lock()
-        defer { lock.unlock() }
-        guard let index = sockets.firstIndex(where: { $0.id == id }) else {
-            assertionFailure()
-            return
-        }
-        sockets.remove(at: index)
-        
+        sockets[fileDescriptor] = nil
+        updatePollDescriptors()
+        lock.unlock()
     }
     
-    func queueWrite(_ data: Data, for socket: Socket) {
+    func write(_ data: Data, for fileDescriptor: FileDescriptor) {
         lock.lock()
-        defer { lock.unlock() }
-        
+        assert(sockets[fileDescriptor] == nil)
+        sockets[fileDescriptor]?.pendingWrites.append(data)
+        lock.unlock()
     }
     
     /// Setup runloop  once
@@ -74,7 +79,6 @@ internal final class SocketManager {
         context.info = Unmanaged<SocketManager>
             .passUnretained(self)
             .toOpaque()
-        
         let source = CFRunLoopSourceCreate(nil, 0, &context)
         let runloop = CFRunLoopGetCurrent()
         CFRunLoopAddSource(runloop, source, .defaultMode)
@@ -88,12 +92,16 @@ internal final class SocketManager {
         CFRunLoopRemoveSource(runloop, source, .defaultMode)
     }
     
-    internal func poll() {
-        var pollDescriptors = sockets
+    private func updatePollDescriptors() {
+        pollDescriptors = sockets.keys
             .lazy
-            .map { $0.socket.takeUnretainedValue().fileDescriptor }
+            .sorted(by: { $0.rawValue < $1.rawValue })
             .map { FileDescriptor.Poll(fileDescriptor: $0, events: .socket) }
-        
+    }
+    
+    internal func poll() {
+        lock.lock()
+        defer { lock.unlock() }
         do {
             try pollDescriptors.poll()
         }
@@ -103,29 +111,97 @@ internal final class SocketManager {
         }
         
         for poll in pollDescriptors {
-            guard poll.returnedEvents.isEmpty == false else { return }
-            sockets
-                .lazy
-                .map { $0.takeUnretainedValue() }
-                .filter { $0.fileDescriptor == poll.fileDescriptor }
-                .forEach { $0.didPoll(poll.returnedEvents) }
+            let fileEvents = poll.returnedEvents
+            let fileDescriptor = poll.fileDescriptor
+            if fileEvents.contains(.read) ||
+                fileEvents.contains(.readUrgent) {
+                shouldRead(fileDescriptor)
+            }
+            if fileEvents.contains(.write) {
+                canWrite(fileDescriptor)
+            }
+            if fileEvents.contains(.invalidRequest) {
+                assertionFailure()
+                error(Errno.badFileDescriptor, for: fileDescriptor)
+            }
+            if fileEvents.contains(.hangup) {
+                error(Errno.connectionAbort, for: fileDescriptor)
+            }
+            if fileEvents.contains(.error) {
+                error(Errno.connectionReset, for: fileDescriptor)
+            }
+        }
+    }
+    
+    private func error(_ error: Error, for fileDescriptor: FileDescriptor) {
+        delegate?.socket(fileDescriptor, error: error)
+    }
+    
+    private func shouldRead(_ fileDescriptor: FileDescriptor) {
+        guard let _ = self.sockets[fileDescriptor]
+            else { return }
+        let bytesToRead = delegate?.socketShouldRead(fileDescriptor) ?? 0
+        guard bytesToRead > 0 else { return }
+        var data = Data(count: Int(bytesToRead))
+        do {
+            let bytesRead = try data.withUnsafeMutableBytes {
+                try fileDescriptor.read(into: $0)
+            }
+            if bytesRead < bytesToRead {
+                data = data.prefix(bytesRead)
+            }
+            delegate?.socket(fileDescriptor, didRead: .success(data))
+        } catch {
+            delegate?.socket(fileDescriptor, didRead: .failure(error))
+        }
+    }
+    
+    private func canWrite(_ fileDescriptor: FileDescriptor) {
+        guard let socket = self.sockets[fileDescriptor],
+            socket.pendingWrites.isEmpty == false
+            else { return }
+        let pendingData = socket.pendingWrites.removeFirst()
+        //
+        Task(priority: .high) {
+            do {
+                let byteCount = try pendingData.withUnsafeBytes {
+                    try fileDescriptor.write($0)
+                }
+                delegate?.socket(fileDescriptor, didWrite: .success(byteCount))
+            }
+            catch {
+                delegate?.socket(fileDescriptor, didWrite: .failure(error))
+            }
         }
     }
 }
 
 // MARK: - Supporting Types
 
+protocol SocketManagerDelegate: AnyObject {
+    
+    func socket(_ fileDescriptor: FileDescriptor, didWrite write: Result<Int, Error>)
+    
+    func socketShouldRead(_ fileDescriptor: FileDescriptor) -> UInt
+    
+    func socket(_ fileDescriptor: FileDescriptor, didRead read: Result<Data, Error>)
+    
+    func socket(_ fileDescriptor: FileDescriptor, error: Error)
+}
+
 extension SocketManager {
     
-    struct SocketState {
-        
-        let id: ObjectIdentifier
-        
+    final class SocketState {
+                
         let fileDescriptor: FileDescriptor
         
-        let socket: Unmanaged<Socket>
+        init(fileDescriptor: FileDescriptor) {
+            self.fileDescriptor = fileDescriptor
+        }
         
-        var hasPendingWrites = false
+        var pendingWrites = [Data]()
+        
+        var isWriting = false
     }
 }
 
@@ -133,7 +209,6 @@ extension SocketManager {
 
 @_silgen_name("swift_socket_manager_perform")
 internal func SocketManagerPerform(_ pointer: UnsafeMutableRawPointer?) {
-    assert(Thread.isMainThread)
     guard let pointer = pointer else {
         assertionFailure()
         return

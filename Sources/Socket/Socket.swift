@@ -18,20 +18,14 @@ public final class Socket {
     public let fileDescriptor: FileDescriptor
     
     internal let event: ((Event) -> ())
-    
-    public let priority: TaskPriority
-    
-    private let storage = Storage()
-    
-    internal private(set) var hasPendingWrite = ManagedAtomic<Bool>(false)
-    
-    internal private(set) var isWriting = ManagedAtomic<Bool>(false)
-    
+        
     // MARK: - Initialization
     
     deinit {
         // remove from global manager
-        SocketManager.shared.remove(self)
+        DispatchQueue.main.sync { [unowned self] in
+            SocketManager.shared.remove(self)
+        }
         
         // close
         do {
@@ -44,11 +38,9 @@ public final class Socket {
         
     public init(
         fileDescriptor: FileDescriptor,
-        priority: TaskPriority = .high,
         event: @escaping (Event) -> () = { _ in }
     ) {
         self.fileDescriptor = fileDescriptor
-        self.priority = priority
         self.event = event
         
         // make sure its non blocking
@@ -60,15 +52,17 @@ public final class Socket {
         }
         
         // schedule on global manager
-        SocketManager.shared.add(self)
+        DispatchQueue.main.async { [unowned self] in
+            SocketManager.shared.add(self)
+        }
     }
     
     // MARK: - Methods
     
     public func write(_ data: Data) async throws {
-        hasPendingWrite.store(true, ordering: .sequentiallyConsistent)
-        await storage.queueWrite(data)
-        
+        DispatchQueue.main.async { [unowned self] in
+            SocketManager.shared.queueWrite(data, for: self)
+        }
     }
         
     internal func didPoll(_ fileEvents: FileEvents) {
@@ -148,4 +142,3 @@ internal extension Socket {
     }
 }
 
-internal extension
