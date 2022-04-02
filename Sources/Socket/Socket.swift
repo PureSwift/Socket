@@ -23,9 +23,7 @@ public final class Socket {
     
     deinit {
         // remove from global manager
-        DispatchQueue.main.sync { [unowned self] in
-            SocketManager.shared.remove(self)
-        }
+        SocketManager.shared.remove(fileDescriptor)
         
         // close
         do {
@@ -51,10 +49,7 @@ public final class Socket {
             return
         }
         
-        // schedule on global manager
-        DispatchQueue.main.async { [unowned self] in
-            SocketManager.shared.add(self)
-        }
+        SocketManager.shared.add(fileDescriptor)
     }
     
     // MARK: - Methods
@@ -125,20 +120,9 @@ public extension Socket {
 
 internal extension Socket {
     
-    actor Storage {
+    final class Delegate: SocketManagerDelegate {
         
-        var pendingWrites = [Data]()
         
-        func queueWrite(_ data: Data) {
-            pendingWrites.append(data)
-        }
-        
-        func dequeueWrite() -> Data? {
-            guard pendingWrites.isEmpty == false else {
-                return nil
-            }
-            return pendingWrites.removeFirst()
-        }
     }
 }
 

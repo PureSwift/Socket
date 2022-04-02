@@ -150,9 +150,9 @@ internal final class SocketManager {
             if bytesRead < bytesToRead {
                 data = data.prefix(bytesRead)
             }
-            delegate?.socket(fileDescriptor, didRead: .success(data))
+            delegate?.socket(fileDescriptor, didRead: data)
         } catch {
-            delegate?.socket(fileDescriptor, didRead: .failure(error))
+            delegate?.socket(fileDescriptor, error: error)
         }
     }
     
@@ -167,10 +167,10 @@ internal final class SocketManager {
                 let byteCount = try pendingData.withUnsafeBytes {
                     try fileDescriptor.write($0)
                 }
-                delegate?.socket(fileDescriptor, didWrite: .success(byteCount))
+                delegate?.socket(fileDescriptor, didWrite: byteCount)
             }
             catch {
-                delegate?.socket(fileDescriptor, didWrite: .failure(error))
+                delegate?.socket(fileDescriptor, error: error)
             }
         }
     }
@@ -180,11 +180,11 @@ internal final class SocketManager {
 
 protocol SocketManagerDelegate: AnyObject {
     
-    func socket(_ fileDescriptor: FileDescriptor, didWrite write: Result<Int, Error>)
+    func socket(_ fileDescriptor: FileDescriptor, didWrite write: Int)
     
     func socketShouldRead(_ fileDescriptor: FileDescriptor) -> UInt
     
-    func socket(_ fileDescriptor: FileDescriptor, didRead read: Result<Data, Error>)
+    func socket(_ fileDescriptor: FileDescriptor, didRead read: Data)
     
     func socket(_ fileDescriptor: FileDescriptor, error: Error)
 }
