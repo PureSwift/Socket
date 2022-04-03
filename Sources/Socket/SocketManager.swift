@@ -154,14 +154,21 @@ internal final class SocketManager {
     }
     
     private func error(_ error: Errno, for fileDescriptor: FileDescriptor) {
-        guard let socket = self.sockets[fileDescriptor]
-            else { return }
-        // end all pending operations
-        while let operation = socket.pendingRead.pop() {
-            operation.continuation.resume(throwing: error)
+        guard let socket = self.sockets[fileDescriptor] else {
+            assertionFailure()
+            return
         }
-        while let operation = socket.pendingWrite.pop() {
-            operation.continuation.resume(throwing: error)
+        // execute
+        Task(priority: .high) {
+            socket.lock.lock()
+            // end all pending operations
+            while let operation = socket.pendingRead.pop() {
+                operation.continuation.resume(throwing: error)
+            }
+            while let operation = socket.pendingWrite.pop() {
+                operation.continuation.resume(throwing: error)
+            }
+            socket.lock.unlock()
         }
     }
     
@@ -195,7 +202,7 @@ internal final class SocketManager {
 extension SocketManager {
     
     final class SocketState {
-                
+        
         let fileDescriptor: FileDescriptor
         
         init(fileDescriptor: FileDescriptor) {

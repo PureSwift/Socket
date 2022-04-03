@@ -10,36 +10,22 @@ import SystemPackage
 import Atomics
 
 /// Socket
-public final class Socket {
+public struct Socket {
     
     // MARK: - Properties
     
     /// Underlying file descriptor
     public let fileDescriptor: FileDescriptor
-    
-    internal let event: ((Event) -> ())
+        
+    internal unowned let manager: SocketManager
         
     // MARK: - Initialization
     
-    deinit {
-        // remove from global manager
-        SocketManager.shared.remove(fileDescriptor)
-        
-        // close
-        do {
-            try fileDescriptor.close()
-        }
-        catch {
-            log("Unable to close socket \(fileDescriptor)")
-        }
-    }
-        
     public init(
-        fileDescriptor: FileDescriptor,
-        event: @escaping (Event) -> () = { _ in }
+        fileDescriptor: FileDescriptor
     ) {
         self.fileDescriptor = fileDescriptor
-        self.event = event
+        self.manager = SocketManager.shared
         
         // make sure its non blocking
         do { try setNonBlock() }
@@ -49,52 +35,17 @@ public final class Socket {
             return
         }
         
-        SocketManager.shared.add(fileDescriptor)
+        manager.add(fileDescriptor)
     }
     
     // MARK: - Methods
     
     public func write(_ data: Data) async throws {
-        DispatchQueue.main.async { [unowned self] in
-            SocketManager.shared.queueWrite(data, for: self)
-        }
-    }
-        
-    internal func didPoll(_ fileEvents: FileEvents) {
-        if fileEvents.contains(.read) ||
-            fileEvents.contains(.readUrgent) {
-            shouldRead()
-        }
-        if fileEvents.contains(.write) {
-            canWrite()
-        }
-        if fileEvents.contains(.error) ||
-            fileEvents.contains(.invalidRequest) ||
-            fileEvents.contains(.hangup) {
-            didError()
-        }
+        try await manager.write(data, for: fileDescriptor)
     }
     
-    private func shouldRead() {
-        
-    }
-    
-    private func canWrite() {
-        let fileDescriptor = self.fileDescriptor
-        guard hasPendingWrite.load(ordering: .sequentiallyConsistent),
-              isWriting.load(ordering: .relaxed) == false else { return }
-        isWriting.store(true, ordering: .relaxed)
-        Task(priority: priority) {
-            guard let pendingData = await storage.dequeueWrite() else { return }
-            try pendingData.withUnsafeBytes {
-                do { try fileDescriptor.write($0) }
-                catch Errno.wouldBlock { }
-            }
-        }
-    }
-    
-    private func didError() {
-        
+    public func read(_ length: Int) async throws -> Data {
+        try await manager.read(length, for: fileDescriptor)
     }
     
     private func setNonBlock() throws {
@@ -117,12 +68,3 @@ public extension Socket {
         case close(Error?)
     }
 }
-
-internal extension Socket {
-    
-    final class Delegate: SocketManagerDelegate {
-        
-        
-    }
-}
-
