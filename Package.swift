@@ -19,14 +19,12 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/PureSwift/swift-system.git", .branch("master")),
-        .package(url: "https://github.com/apple/swift-atomics.git", from: "1.0.2"),
     ],
     targets: [
         .target(
             name: "Socket",
             dependencies: [
                 .product(name: "SystemPackage", package: "swift-system"),
-                .product(name: "Atomics", package: "swift-atomics"),
             ]
         ),
         .testTarget(
