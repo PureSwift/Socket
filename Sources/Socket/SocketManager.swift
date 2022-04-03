@@ -13,9 +13,7 @@ import Atomics
 internal final class SocketManager {
     
     static let shared = SocketManager()
-    
-    weak var delegate: SocketManagerDelegate?
-    
+        
     private var didSetup = false
     
     private var sockets = [FileDescriptor: SocketState]()
@@ -64,11 +62,33 @@ internal final class SocketManager {
         lock.unlock()
     }
     
-    func write(_ data: Data, for fileDescriptor: FileDescriptor) {
-        lock.lock()
-        assert(sockets[fileDescriptor] == nil)
-        sockets[fileDescriptor]?.pendingWrites.append(data)
-        lock.unlock()
+    @discardableResult
+    func write(_ data: Data, for fileDescriptor: FileDescriptor) async throws -> Int {
+        return try await withThrowingContinuation(for: fileDescriptor) { continuation in
+            let write = Write(
+                fileDescriptor: fileDescriptor,
+                data: data,
+                continuation: continuation
+            )
+            lock.lock()
+            assert(sockets[fileDescriptor] != nil)
+            sockets[fileDescriptor]?.pendingWrite.push(write)
+            lock.unlock()
+        }
+    }
+    
+    func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
+        return try await withThrowingContinuation(for: fileDescriptor) { continuation in
+            let read = Read(
+                fileDescriptor: fileDescriptor,
+                length: length,
+                continuation: continuation
+            )
+            lock.lock()
+            assert(sockets[fileDescriptor] != nil)
+            sockets[fileDescriptor]?.pendingRead.push(read)
+            lock.unlock()
+        }
     }
     
     /// Setup runloop  once
@@ -122,72 +142,55 @@ internal final class SocketManager {
             }
             if fileEvents.contains(.invalidRequest) {
                 assertionFailure()
-                error(Errno.badFileDescriptor, for: fileDescriptor)
+                error(.badFileDescriptor, for: fileDescriptor)
             }
             if fileEvents.contains(.hangup) {
-                error(Errno.connectionAbort, for: fileDescriptor)
+                error(.connectionAbort, for: fileDescriptor)
             }
             if fileEvents.contains(.error) {
-                error(Errno.connectionReset, for: fileDescriptor)
+                error(.connectionReset, for: fileDescriptor)
             }
         }
     }
     
-    private func error(_ error: Error, for fileDescriptor: FileDescriptor) {
-        delegate?.socket(fileDescriptor, error: error)
+    private func error(_ error: Errno, for fileDescriptor: FileDescriptor) {
+        guard let socket = self.sockets[fileDescriptor]
+            else { return }
+        // end all pending operations
+        while let operation = socket.pendingRead.pop() {
+            operation.continuation.resume(throwing: error)
+        }
+        while let operation = socket.pendingWrite.pop() {
+            operation.continuation.resume(throwing: error)
+        }
     }
     
     private func shouldRead(_ fileDescriptor: FileDescriptor) {
-        guard let _ = self.sockets[fileDescriptor]
+        guard let socket = self.sockets[fileDescriptor],
+              let read = socket.pendingRead.pop()
             else { return }
-        let bytesToRead = delegate?.socketShouldRead(fileDescriptor) ?? 0
-        guard bytesToRead > 0 else { return }
-        var data = Data(count: Int(bytesToRead))
-        do {
-            let bytesRead = try data.withUnsafeMutableBytes {
-                try fileDescriptor.read(into: $0)
-            }
-            if bytesRead < bytesToRead {
-                data = data.prefix(bytesRead)
-            }
-            delegate?.socket(fileDescriptor, didRead: data)
-        } catch {
-            delegate?.socket(fileDescriptor, error: error)
+        // execute
+        Task(priority: .high) {
+            socket.lock.lock()
+            read.execute()
+            socket.lock.unlock()
         }
     }
     
     private func canWrite(_ fileDescriptor: FileDescriptor) {
         guard let socket = self.sockets[fileDescriptor],
-            socket.pendingWrites.isEmpty == false
+              let write = socket.pendingWrite.pop()
             else { return }
-        let pendingData = socket.pendingWrites.removeFirst()
-        //
+        // execute
         Task(priority: .high) {
-            do {
-                let byteCount = try pendingData.withUnsafeBytes {
-                    try fileDescriptor.write($0)
-                }
-                delegate?.socket(fileDescriptor, didWrite: byteCount)
-            }
-            catch {
-                delegate?.socket(fileDescriptor, error: error)
-            }
+            socket.lock.lock()
+            write.execute()
+            socket.lock.unlock()
         }
     }
 }
 
 // MARK: - Supporting Types
-
-protocol SocketManagerDelegate: AnyObject {
-    
-    func socket(_ fileDescriptor: FileDescriptor, didWrite write: Int)
-    
-    func socketShouldRead(_ fileDescriptor: FileDescriptor) -> UInt
-    
-    func socket(_ fileDescriptor: FileDescriptor, didRead read: Data)
-    
-    func socket(_ fileDescriptor: FileDescriptor, error: Error)
-}
 
 extension SocketManager {
     
@@ -199,9 +202,56 @@ extension SocketManager {
             self.fileDescriptor = fileDescriptor
         }
         
-        var pendingWrites = [Data]()
+        let lock = NSLock()
         
-        var isWriting = false
+        var pendingWrite = Queue<Write>()
+        
+        var pendingRead = Queue<Read>()
+    }
+}
+
+internal extension SocketManager {
+    
+    struct Write {
+        let fileDescriptor: FileDescriptor
+        let data: Data
+        let continuation: SocketContinuation<Int, Error>
+        
+        func execute() {
+            log("Will write \(data.count) bytes to \(fileDescriptor)")
+            
+            do {
+                let byteCount = try data.withUnsafeBytes {
+                    try fileDescriptor.write($0)
+                }
+                continuation.resume(returning: byteCount)
+            }
+            catch {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+    
+    struct Read {
+        let fileDescriptor: FileDescriptor
+        let length: Int
+        let continuation: SocketContinuation<Data, Error>
+        
+        func execute() {
+            log("Will read \(length) bytes to \(fileDescriptor)")
+            var data = Data(count: length)
+            do {
+                let bytesRead = try data.withUnsafeMutableBytes {
+                    try fileDescriptor.read(into: $0)
+                }
+                if bytesRead < length {
+                    data = data.prefix(bytesRead)
+                }
+                continuation.resume(returning: data)
+            } catch {
+                continuation.resume(throwing: error)
+            }
+        }
     }
 }
 
