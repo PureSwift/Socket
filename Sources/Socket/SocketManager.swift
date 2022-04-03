@@ -56,6 +56,7 @@ internal final class SocketManager {
     }
     
     func remove(_ fileDescriptor: FileDescriptor) {
+        try? fileDescriptor.close()
         lock.lock()
         sockets[fileDescriptor] = nil
         updatePollDescriptors()
@@ -160,8 +161,8 @@ internal final class SocketManager {
         }
         // execute
         Task(priority: .high) {
-            socket.lock.lock()
             // end all pending operations
+            socket.lock.lock()
             while let operation = socket.pendingRead.pop() {
                 operation.continuation.resume(throwing: error)
             }
@@ -169,6 +170,7 @@ internal final class SocketManager {
                 operation.continuation.resume(throwing: error)
             }
             socket.lock.unlock()
+            self.remove(fileDescriptor)
         }
     }
     

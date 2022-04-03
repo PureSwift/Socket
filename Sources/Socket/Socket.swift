@@ -18,7 +18,7 @@ public struct Socket {
     public let fileDescriptor: FileDescriptor
         
     internal unowned let manager: SocketManager
-        
+    
     // MARK: - Initialization
     
     public init(
@@ -40,12 +40,18 @@ public struct Socket {
     
     // MARK: - Methods
     
-    public func write(_ data: Data) async throws {
+    /// Write to socket
+    public func write(_ data: Data) async throws -> Int {
         try await manager.write(data, for: fileDescriptor)
     }
     
+    /// Read from socket
     public func read(_ length: Int) async throws -> Data {
         try await manager.read(length, for: fileDescriptor)
+    }
+    
+    public func close() {
+        manager.remove(fileDescriptor)
     }
     
     private func setNonBlock() throws {
