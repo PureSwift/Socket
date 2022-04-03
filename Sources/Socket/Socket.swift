@@ -7,7 +7,6 @@
 
 import Foundation
 import SystemPackage
-import Atomics
 
 /// Socket
 public struct Socket {
@@ -41,6 +40,7 @@ public struct Socket {
     // MARK: - Methods
     
     /// Write to socket
+    @discardableResult
     public func write(_ data: Data) async throws -> Int {
         try await manager.write(data, for: fileDescriptor)
     }
