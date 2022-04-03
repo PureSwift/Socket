@@ -18,16 +18,8 @@ internal final class SocketManager {
     private var sockets = [FileDescriptor: SocketState]()
     
     private var pollDescriptors = [FileDescriptor.Poll]()
-    
-    private var runloop: CFRunLoop?
-    
-    private var source: CFRunLoopSource?
             
     private var lock = NSLock()
-    
-    deinit {
-        removeRunloop()
-    }
     
     private init() {
         // Add to runloop of background thread from concurrency thread pool
@@ -100,27 +92,6 @@ internal final class SocketManager {
         }
     }
     
-    /// Setup runloop  once
-    private func addRunloop() {
-        guard didSetup == false else { return }
-        var context = CFRunLoopSourceContext()
-        context.perform = SocketManagerPerform
-        context.info = Unmanaged<SocketManager>
-            .passUnretained(self)
-            .toOpaque()
-        let source = CFRunLoopSourceCreate(nil, 0, &context)
-        let runloop = CFRunLoopGetCurrent()
-        CFRunLoopAddSource(runloop, source, .defaultMode)
-        self.source = source
-        self.runloop = runloop
-        self.didSetup = true
-    }
-    
-    private func removeRunloop() {
-        guard didSetup, let runloop = runloop, let source = source else { return }
-        CFRunLoopRemoveSource(runloop, source, .defaultMode)
-    }
-    
     private func updatePollDescriptors() {
         pollDescriptors = sockets.keys
             .lazy
@@ -131,6 +102,8 @@ internal final class SocketManager {
     internal func poll() {
         lock.lock()
         defer { lock.unlock() }
+        guard pollDescriptors.isEmpty == false
+            else { return }
         do {
             try pollDescriptors.poll()
         }
