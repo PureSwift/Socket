@@ -33,7 +33,7 @@ internal final class SocketManager {
         // Add to runloop of background thread from concurrency thread pool
         Task(priority: .high) { [weak self] in
             while let self = self {
-                try? await Task.sleep(nanoseconds: 10_000_000)
+                try? await Task.sleep(nanoseconds: 100_000_000)
                 self.poll()
             }
         }
@@ -76,6 +76,9 @@ internal final class SocketManager {
             lock.lock()
             assert(sockets[fileDescriptor] != nil)
             sockets[fileDescriptor]?.pendingWrite.push(write)
+            Task(priority: .high) { [unowned self] in
+                self.poll()
+            }
             lock.unlock()
         }
     }
@@ -90,6 +93,9 @@ internal final class SocketManager {
             lock.lock()
             assert(sockets[fileDescriptor] != nil)
             sockets[fileDescriptor]?.pendingRead.push(read)
+            Task(priority: .high) { [unowned self] in
+                self.poll()
+            }
             lock.unlock()
         }
     }
