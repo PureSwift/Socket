@@ -192,37 +192,43 @@ extension SocketManager {
 extension SocketManager.SocketState {
     
     // locks the socket
-    private func execute() {
-        
-    }
-    
-    func write(data: Data) throws -> Int {
-        assert(isExecuting == false)
-        log("Will write \(data.count) bytes to \(fileDescriptor)")
+    private func execute<T>(
+        sleep nanoseconds: UInt64 = 10_000_000,
+        _ block: () async throws -> (T)
+    ) async throws -> T {
+        while isExecuting {
+            try await Task.sleep(nanoseconds: nanoseconds)
+        }
         isExecuting = true
         defer { isExecuting = false }
-        let byteCount = try data.withUnsafeBytes {
-            try fileDescriptor.write($0)
-        }
-        // notify
-        event?(.write(byteCount))
-        return byteCount
+        return try await block()
     }
     
-    func read(length: Int) throws -> Data {
-        assert(isExecuting == false)
-        log("Will read \(length) bytes to \(fileDescriptor)")
-        isExecuting = true
-        defer { isExecuting = false }
-        var data = Data(count: length)
-        let bytesRead = try data.withUnsafeMutableBytes {
-            try fileDescriptor.read(into: $0)
+    func write(data: Data) async throws -> Int {
+        try await execute {
+            log("Will write \(data.count) bytes to \(fileDescriptor)")
+            let byteCount = try data.withUnsafeBytes {
+                try fileDescriptor.write($0)
+            }
+            // notify
+            event?(.write(byteCount))
+            return byteCount
         }
-        if bytesRead < length {
-            data = data.prefix(bytesRead)
+    }
+    
+    func read(length: Int) async throws -> Data {
+        try await execute {
+            log("Will read \(length) bytes to \(fileDescriptor)")
+            var data = Data(count: length)
+            let bytesRead = try data.withUnsafeMutableBytes {
+                try fileDescriptor.read(into: $0)
+            }
+            if bytesRead < length {
+                data = data.prefix(bytesRead)
+            }
+            // notify
+            event?(.read(bytesRead))
+            return data
         }
-        // notify
-        event?(.read(bytesRead))
-        return data
     }
 }
