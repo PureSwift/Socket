@@ -20,11 +20,14 @@ public struct Socket {
     
     // MARK: - Initialization
     
+    /// Starts monitoring a socket.
     public init(
-        fileDescriptor: FileDescriptor
+        fileDescriptor: FileDescriptor,
+        event: ((Event) -> ())? = nil
     ) {
+        let manager = SocketManager.shared
         self.fileDescriptor = fileDescriptor
-        self.manager = SocketManager.shared
+        self.manager = manager
         
         // make sure its non blocking
         do { try setNonBlock() }
@@ -34,7 +37,10 @@ public struct Socket {
             return
         }
         
-        manager.add(fileDescriptor)
+        // start monitoring
+        Task {
+            await manager.add(fileDescriptor: fileDescriptor, event: event)
+        }
     }
     
     // MARK: - Methods
@@ -51,7 +57,9 @@ public struct Socket {
     }
     
     public func close() {
-        manager.remove(fileDescriptor)
+        Task {
+            await manager.remove(fileDescriptor)
+        }
     }
     
     private func setNonBlock() throws {
@@ -69,8 +77,9 @@ public extension Socket {
     
     /// Socket Event
     enum Event {
-        case read(Data)
-        case write(Data)
+        case pendingRead
+        case read(Int)
+        case write(Int)
         case close(Error?)
     }
 }

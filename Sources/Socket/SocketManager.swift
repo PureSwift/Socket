@@ -24,7 +24,13 @@ internal actor SocketManager {
     private func startMonitoring() {
         guard isMonitoring == false else { return }
         isMonitoring = true
-        
+        // Add to runloop of background thread from concurrency thread pool
+        Task(priority: .medium) { [weak self] in
+            while let self = self {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                await self.poll()
+            }
+        }
     }
     
     func contains(_ fileDescriptor: FileDescriptor) -> Bool {
@@ -156,6 +162,8 @@ internal actor SocketManager {
             assertionFailure()
             return
         }
+        // notify
+        socket.event?(.close(error))
         // end all pending operations
         while let operation = await socket.dequeueRead() {
             operation.continuation.resume(throwing: error)
@@ -171,6 +179,9 @@ internal actor SocketManager {
             assertionFailure()
             return
         }
+        // notify
+        socket.event?(.pendingRead)
+        // execute
         guard let read = await socket.dequeueRead()
             else { return }
         await socket.execute(read)
@@ -181,9 +192,9 @@ internal actor SocketManager {
             assertionFailure()
             return
         }
+        // execute
         guard let write = await socket.dequeueWrite()
             else { return }
-        // execute
         await socket.execute(write)
     }
 }
@@ -198,12 +209,6 @@ extension SocketManager {
                 
         let event: ((Socket.Event) -> ())?
         
-        init(fileDescriptor: FileDescriptor,
-             event: ((Socket.Event) -> ())?) {
-            self.fileDescriptor = fileDescriptor
-            self.event = event
-        }
-        
         var isExecuting = false
         
         var pendingWrite = Queue<Write>()
@@ -211,6 +216,13 @@ extension SocketManager {
         var pendingRead = Queue<Read>()
         
         private var lastID: UInt64 = 0
+        
+        init(fileDescriptor: FileDescriptor,
+             event: ((Socket.Event) -> ())? = nil
+        ) {
+            self.fileDescriptor = fileDescriptor
+            self.event = event
+        }
     }
 }
 
@@ -266,6 +278,8 @@ extension SocketManager.SocketState {
                 try fileDescriptor.write($0)
             }
             operation.continuation.resume(returning: byteCount)
+            // notify
+            event?(.write(byteCount))
         }
         catch {
             operation.continuation.resume(throwing: error)
@@ -286,6 +300,8 @@ extension SocketManager.SocketState {
                 data = data.prefix(bytesRead)
             }
             operation.continuation.resume(returning: data)
+            // notify
+            event?(.read(bytesRead))
         } catch {
             operation.continuation.resume(throwing: error)
         }
