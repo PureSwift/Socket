@@ -18,17 +18,17 @@ internal actor SocketManager {
     private var pollDescriptors = [FileDescriptor.Poll]()
     
     private var isMonitoring = false
-    
+        
     private init() { }
     
     private func startMonitoring() {
         guard isMonitoring == false else { return }
         isMonitoring = true
         // Add to runloop of background thread from concurrency thread pool
-        Task(priority: .medium) { [weak self] in
+        Task(priority: Socket.configuration.monitorPriority) { [weak self] in
             while let self = self {
                 do {
-                    try await Task.sleep(nanoseconds: 100_000_000)
+                    try await Task.sleep(nanoseconds: Socket.configuration.monitorInterval)
                     try await self.poll()
                 }
                 catch {
@@ -78,8 +78,9 @@ internal actor SocketManager {
             assertionFailure("Unknown socket")
             throw Errno.invalidArgument
         }
-        try await wait(for: .write, fileDescriptor: fileDescriptor)
-        return try await socket.write(data: data)
+        let nanoseconds = Socket.configuration.writeInterval
+        try await wait(for: .write, fileDescriptor: fileDescriptor, sleep: nanoseconds)
+        return try await socket.write(data: data, sleep: nanoseconds)
     }
     
     internal func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
@@ -87,8 +88,9 @@ internal actor SocketManager {
             assertionFailure("Unknown socket")
             throw Errno.invalidArgument
         }
-        try await wait(for: .read, fileDescriptor: fileDescriptor)
-        return try await socket.read(length: length)
+        let nanoseconds = Socket.configuration.writeInterval
+        try await wait(for: .read, fileDescriptor: fileDescriptor, sleep: nanoseconds)
+        return try await socket.read(length: length, sleep: nanoseconds)
     }
     
     internal func events(for fileDescriptor: FileDescriptor) -> FileEvents {
@@ -205,8 +207,8 @@ extension SocketManager.SocketState {
         return try await block()
     }
     
-    func write(data: Data) async throws -> Int {
-        try await execute {
+    func write(data: Data, sleep nanoseconds: UInt64 = 10_000_000) async throws -> Int {
+        try await execute(sleep: nanoseconds) {
             log("Will write \(data.count) bytes to \(fileDescriptor)")
             let byteCount = try data.withUnsafeBytes {
                 try fileDescriptor.write($0)
@@ -217,8 +219,8 @@ extension SocketManager.SocketState {
         }
     }
     
-    func read(length: Int) async throws -> Data {
-        try await execute {
+    func read(length: Int, sleep nanoseconds: UInt64 = 10_000_000) async throws -> Data {
+        try await execute(sleep: nanoseconds) {
             log("Will read \(length) bytes to \(fileDescriptor)")
             var data = Data(count: length)
             let bytesRead = try data.withUnsafeMutableBytes {

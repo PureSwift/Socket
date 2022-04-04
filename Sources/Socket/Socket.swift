@@ -13,6 +13,9 @@ public struct Socket {
     
     // MARK: - Properties
     
+    /// Configuration for fine-tuning socket performance.
+    public static var configuration = Configuration()
+    
     /// Underlying file descriptor
     public let fileDescriptor: FileDescriptor
     
@@ -38,7 +41,7 @@ public struct Socket {
         }
         
         // start monitoring
-        Task {
+        Task(priority: Task.currentPriority) {
             await manager.add(fileDescriptor: fileDescriptor, event: event)
         }
     }
@@ -57,7 +60,7 @@ public struct Socket {
     }
     
     public func close() {
-        Task {
+        Task(priority: Task.currentPriority) {
             await manager.remove(fileDescriptor)
         }
     }
@@ -81,5 +84,23 @@ public extension Socket {
         case read(Int)
         case write(Int)
         case close(Error?)
+    }
+}
+
+public extension Socket {
+    
+    struct Configuration {
+        
+        /// Interval in nanoseconds for monitoring / polling socket.
+        public var monitorInterval: UInt64 = 100_000_000
+        
+        /// Interval in nanoseconds for polling socket when reading.
+        public var readInterval: UInt64 = 100_000_000
+        
+        /// Interval in nanoseconds for polling socket when writing.
+        public var writeInterval: UInt64 = 10_000_000
+        
+        /// Task priority for backgroud socket polling.
+        public var monitorPriority: TaskPriority = .medium
     }
 }
