@@ -54,13 +54,17 @@ internal actor SocketManager {
         startMonitoring()
     }
     
-    func remove(_ fileDescriptor: FileDescriptor) {
+    func remove(_ fileDescriptor: FileDescriptor, error: Error? = nil) {
         guard let socket = sockets[fileDescriptor] else {
             return // could have been removed by `poll()`
         }
-        try? fileDescriptor.close() // TODO:
+        // update sockets to monitor
         sockets[fileDescriptor] = nil
         updatePollDescriptors()
+        // close actual socket
+        try? fileDescriptor.close()
+        // notify
+        socket.event?(.close(error))
     }
     
     @discardableResult
@@ -162,8 +166,6 @@ internal actor SocketManager {
             assertionFailure()
             return
         }
-        // notify
-        socket.event?(.close(error))
         // end all pending operations
         while let operation = await socket.dequeueRead() {
             operation.continuation.resume(throwing: error)
@@ -182,7 +184,8 @@ internal actor SocketManager {
         // notify
         socket.event?(.pendingRead)
         // execute
-        guard let read = await socket.dequeueRead()
+        guard await socket.isExecuting == false, // try again later
+            let read = await socket.dequeueRead()
             else { return }
         await socket.execute(read)
     }
@@ -193,7 +196,8 @@ internal actor SocketManager {
             return
         }
         // execute
-        guard let write = await socket.dequeueWrite()
+        guard await socket.isExecuting == false, // try again later
+              let write = await socket.dequeueWrite()
             else { return }
         await socket.execute(write)
     }
