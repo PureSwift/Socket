@@ -31,6 +31,11 @@ public struct Socket {
         let manager = SocketManager.shared
         self.fileDescriptor = fileDescriptor
         self.manager = manager
+        #if DEBUG
+        let event = event ?? {
+            log("Socket \(fileDescriptor) event: \($0)")
+        }
+        #endif
         
         // make sure its non blocking
         do { try setNonBlock() }

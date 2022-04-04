@@ -23,6 +23,7 @@ internal actor SocketManager {
     
     private func startMonitoring() {
         guard isMonitoring == false else { return }
+        log("Will start monitoring")
         isMonitoring = true
         // Add to runloop of background thread from concurrency thread pool
         Task(priority: Socket.configuration.monitorPriority) { [weak self] in
@@ -36,7 +37,8 @@ internal actor SocketManager {
                     }
                 }
                 catch {
-                    assertionFailure("\(error)")
+                    log("Socket monitoring failed. \(error.localizedDescription)")
+                    assertionFailure("Socket monitoring failed. \(error.localizedDescription)")
                     isMonitoring = false
                 }
             }
@@ -52,9 +54,11 @@ internal actor SocketManager {
         event: ((Socket.Event) -> ())? = nil
     ) {
         guard sockets.keys.contains(fileDescriptor) == false else {
+            log("Another socket for file descriptor \(fileDescriptor) already exists.")
             assertionFailure("Another socket already exists")
             return
         }
+        log("Add socket \(fileDescriptor).")
         // append socket
         sockets[fileDescriptor] = SocketState(
             fileDescriptor: fileDescriptor,
@@ -68,6 +72,7 @@ internal actor SocketManager {
         guard let socket = sockets[fileDescriptor] else {
             return // could have been removed by `poll()`
         }
+        log("Remove socket \(fileDescriptor).")
         // update sockets to monitor
         sockets[fileDescriptor] = nil
         updatePollDescriptors()
@@ -80,6 +85,7 @@ internal actor SocketManager {
     @discardableResult
     internal func write(_ data: Data, for fileDescriptor: FileDescriptor) async throws -> Int {
         guard let socket = sockets[fileDescriptor] else {
+            log("Unkown socket \(fileDescriptor).")
             assertionFailure("Unknown socket")
             throw Errno.invalidArgument
         }
@@ -90,6 +96,7 @@ internal actor SocketManager {
     
     internal func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
         guard let socket = sockets[fileDescriptor] else {
+            log("Unkown socket \(fileDescriptor).")
             assertionFailure("Unknown socket")
             throw Errno.invalidArgument
         }
@@ -100,6 +107,7 @@ internal actor SocketManager {
     
     internal func events(for fileDescriptor: FileDescriptor) -> FileEvents {
         guard let poll = pollDescriptors.first(where: { $0.fileDescriptor == fileDescriptor }) else {
+            log("Unkown socket \(fileDescriptor).")
             assertionFailure()
             return []
         }
@@ -128,8 +136,6 @@ internal actor SocketManager {
     }
     
     internal func poll() async throws {
-        guard pollDescriptors.isEmpty == false
-            else { return }
         do {
             try pollDescriptors.poll()
         }
@@ -160,7 +166,8 @@ internal actor SocketManager {
     
     private func error(_ error: Errno, for fileDescriptor: FileDescriptor) async {
         guard let _ = self.sockets[fileDescriptor] else {
-            assertionFailure()
+            log("Unkown socket \(fileDescriptor).")
+            assertionFailure("Unknown socket")
             return
         }
         self.remove(fileDescriptor, error: error)
@@ -168,7 +175,8 @@ internal actor SocketManager {
     
     private func shouldRead(_ fileDescriptor: FileDescriptor) async {
         guard let socket = self.sockets[fileDescriptor] else {
-            assertionFailure()
+            log("Unkown socket \(fileDescriptor).")
+            assertionFailure("Unknown socket")
             return
         }
         // notify
