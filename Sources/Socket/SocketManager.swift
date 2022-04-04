@@ -142,12 +142,13 @@ internal actor SocketManager {
                 await error(.badFileDescriptor, for: fileDescriptor)
             }
             if fileEvents.contains(.hangup) {
-                await error(.connectionAbort, for: fileDescriptor)
-            }
-            if fileEvents.contains(.error) {
                 await error(.connectionReset, for: fileDescriptor)
             }
+            if fileEvents.contains(.error) {
+                await error(.connectionAbort, for: fileDescriptor)
+            }
         }
+        pollDescriptors.reset()
     }
     
     private func error(_ error: Errno, for fileDescriptor: FileDescriptor) async {
