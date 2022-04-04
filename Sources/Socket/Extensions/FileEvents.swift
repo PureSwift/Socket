@@ -13,7 +13,6 @@ internal extension FileEvents {
     static var socket: FileEvents {
         [
             .read,
-            .readUrgent,
             .write,
             .error,
             .hangup,

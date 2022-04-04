@@ -15,7 +15,7 @@ public struct Socket {
     
     /// Underlying file descriptor
     public let fileDescriptor: FileDescriptor
-        
+    
     internal unowned let manager: SocketManager
     
     // MARK: - Initialization
