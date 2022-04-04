@@ -26,13 +26,18 @@ internal actor SocketManager {
         isMonitoring = true
         // Add to runloop of background thread from concurrency thread pool
         Task(priority: Socket.configuration.monitorPriority) { [weak self] in
-            while let self = self {
+            while let self = self, isMonitoring {
                 do {
                     try await Task.sleep(nanoseconds: Socket.configuration.monitorInterval)
                     try await self.poll()
+                    // stop monitoring if no sockets
+                    if pollDescriptors.isEmpty {
+                        isMonitoring = false
+                    }
                 }
                 catch {
                     assertionFailure("\(error)")
+                    isMonitoring = false
                 }
             }
         }
