@@ -21,9 +21,11 @@ internal final class SocketManager {
             
     private var lock = NSLock()
     
+    private var lastID: UInt64 = 0
+    
     private init() {
         // Add to runloop of background thread from concurrency thread pool
-        Task(priority: .high) { [weak self] in
+        Task(priority: .medium) { [weak self] in
             while let self = self {
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 self.poll()
@@ -61,34 +63,57 @@ internal final class SocketManager {
     func write(_ data: Data, for fileDescriptor: FileDescriptor) async throws -> Int {
         return try await withThrowingContinuation(for: fileDescriptor) { continuation in
             let write = Write(
+                id: newID(),
                 fileDescriptor: fileDescriptor,
                 data: data,
                 continuation: continuation
             )
+            // queue write
             lock.lock()
             assert(sockets[fileDescriptor] != nil)
             sockets[fileDescriptor]?.pendingWrite.push(write)
+            lock.unlock()
+            // poll immediately, write as soon as possible
             Task(priority: .high) { [unowned self] in
                 self.poll()
             }
-            lock.unlock()
         }
     }
     
     func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
         return try await withThrowingContinuation(for: fileDescriptor) { continuation in
             let read = Read(
+                id: newID(),
                 fileDescriptor: fileDescriptor,
                 length: length,
                 continuation: continuation
             )
+            // queue read
             lock.lock()
             assert(sockets[fileDescriptor] != nil)
             sockets[fileDescriptor]?.pendingRead.push(read)
+            lock.unlock()
+            // poll immediately, small transfers can benefit
             Task(priority: .high) { [unowned self] in
                 self.poll()
             }
-            lock.unlock()
+            
+        }
+    }
+    
+    private func newID() -> UInt64 {
+        let (newValue, overflow) = lastID.addingReportingOverflow(1)
+        lastID = overflow ? 0 : newValue
+        return lastID
+    }
+    
+    private func checkCancellation() {
+        // watch for task cancellation
+        Task(priority: .medium) {
+            while Task.isCancelled == false {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            try Task.checkCancellation()
         }
     }
     
@@ -108,7 +133,7 @@ internal final class SocketManager {
             try pollDescriptors.poll()
         }
         catch {
-            log("SocketManager.poll(): \(error.localizedDescription)")
+            log("Unable to poll for events. \(error.localizedDescription)")
             return
         }
         
@@ -141,7 +166,7 @@ internal final class SocketManager {
             return
         }
         // execute
-        Task(priority: .high) {
+        Task(priority: .high) { [unowned self] in
             // end all pending operations
             socket.lock.lock()
             while let operation = socket.pendingRead.pop() {
@@ -203,6 +228,7 @@ extension SocketManager {
 internal extension SocketManager {
     
     struct Write {
+        let id: UInt64
         let fileDescriptor: FileDescriptor
         let data: Data
         let continuation: SocketContinuation<Int, Error>
@@ -223,6 +249,7 @@ internal extension SocketManager {
     }
     
     struct Read {
+        let id: UInt64
         let fileDescriptor: FileDescriptor
         let length: Int
         let continuation: SocketContinuation<Data, Error>
