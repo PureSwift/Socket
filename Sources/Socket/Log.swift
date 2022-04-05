@@ -9,7 +9,17 @@ import Foundation
 
 // Socket logging
 internal func log(_ message: String) {
-    if ProcessInfo.processInfo.environment["SWIFTSOCKETDEBUG"] == "1" {
-        NSLog("Socket: " + message)
+    if let logger = Socket.configuration.log {
+        logger(message)
+    } else {
+        #if DEBUG
+        if debugLogEnabled {
+            NSLog("Socket: " + message)
+        }
+        #endif
     }
 }
+
+#if DEBUG
+let debugLogEnabled = ProcessInfo.processInfo.environment["SWIFTSOCKETDEBUG"] == "1"
+#endif

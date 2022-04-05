@@ -96,6 +96,11 @@ public extension Socket {
     
     struct Configuration {
         
+        public var log: ((String) -> ())?
+        
+        /// Task priority for backgroud socket polling.
+        public var monitorPriority: TaskPriority = .medium
+        
         /// Interval in nanoseconds for monitoring / polling socket.
         public var monitorInterval: UInt64 = 100_000_000
         
@@ -104,8 +109,5 @@ public extension Socket {
         
         /// Interval in nanoseconds for polling socket when writing.
         public var writeInterval: UInt64 = 10_000_000
-        
-        /// Task priority for backgroud socket polling.
-        public var monitorPriority: TaskPriority = .medium
     }
 }
