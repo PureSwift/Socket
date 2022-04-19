@@ -136,6 +136,7 @@ internal actor SocketManager {
     }
     
     internal func poll() async throws {
+        pollDescriptors.reset()
         do {
             try pollDescriptors.poll()
         }
@@ -161,7 +162,6 @@ internal actor SocketManager {
                 await error(.connectionAbort, for: fileDescriptor)
             }
         }
-        pollDescriptors.reset()
     }
     
     private func error(_ error: Errno, for fileDescriptor: FileDescriptor) async {

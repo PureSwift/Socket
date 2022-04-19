@@ -27,7 +27,7 @@ public struct Socket {
     public init(
         fileDescriptor: FileDescriptor,
         event: ((Event) -> ())? = nil
-    ) {
+    ) async {
         let manager = SocketManager.shared
         self.fileDescriptor = fileDescriptor
         self.manager = manager
@@ -46,9 +46,7 @@ public struct Socket {
         }
         
         // start monitoring
-        Task(priority: Task.currentPriority) {
-            await manager.add(fileDescriptor: fileDescriptor, event: event)
-        }
+        await manager.add(fileDescriptor: fileDescriptor, event: event)
     }
     
     // MARK: - Methods
