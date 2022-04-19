@@ -119,13 +119,13 @@ internal actor SocketManager {
         fileDescriptor: FileDescriptor,
         sleep nanoseconds: UInt64 = 10_000_000
     ) async throws {
-        while events(for: fileDescriptor).contains(event) == false {
-            try Task.checkCancellation()
+        repeat {
             try await self.poll()
+            try Task.checkCancellation()
             if events(for: fileDescriptor).contains(event) == false {
                 try await Task.sleep(nanoseconds: nanoseconds)
             }
-        }
+        } while events(for: fileDescriptor).contains(event) == false
     }
     
     private func updatePollDescriptors() {
