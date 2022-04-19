@@ -7,12 +7,12 @@ final class SocketTests: XCTestCase {
     
     func _testUnixSocket() async throws {
         let address = UnixSocketAddress(path: "/tmp/socket1")
-        let socketA = try Socket(
+        let socketA = try await Socket(
             fileDescriptor: .socket(UnixProtocol.raw, bind: address)
         )
         defer { socketA.close() }
         
-        let socketB = try Socket(
+        let socketB = try await Socket(
             fileDescriptor: .socket(UnixProtocol.raw, bind: address)
         )
         defer { socketB.close() }
@@ -24,16 +24,14 @@ final class SocketTests: XCTestCase {
         XCTAssertEqual(data, read)
     }
     
-    @available(macOS 12, *)
     func testIPv4Socket() async throws {
-        let address = IPv4SocketAddress(address: .init(rawValue: "127.0.0.1")!, port: 8081)
+        let address = IPv4SocketAddress(address: .any, port: 8888)
         let data = Data("Test \(UUID())".utf8)
         
-        let server = try Socket(
-            fileDescriptor: .socket(IPv4Protocol.tcp)
+        let server = try await Socket(
+            fileDescriptor: .socket(IPv4Protocol.tcp, bind: address)
         )
         defer { server.close() }
-        try server.fileDescriptor.bind(address)
         NSLog("Server: Created server socket")
         try server.fileDescriptor.listen(backlog: 10)
         
@@ -50,12 +48,14 @@ final class SocketTests: XCTestCase {
             }
         }
         
-        let client = try Socket(
+        NSLog("Client: Created client socket")
+        let client = try await Socket(
             fileDescriptor: .socket(IPv4Protocol.tcp)
         )
         defer { client.close() }
         
-        try await client.fileDescriptor.connect(to: address, sleep: 10_000_000)
+        NSLog("Client: Will connect to server")
+        try await client.fileDescriptor.connect(to: address, sleep: 100_000_000)
         NSLog("Client: Connected to server")
         let read = try await client.read(data.count)
         NSLog("Client: Read incoming data")

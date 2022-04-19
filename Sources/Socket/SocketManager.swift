@@ -191,7 +191,7 @@ extension SocketManager {
     actor SocketState {
         
         let fileDescriptor: FileDescriptor
-                
+        
         let event: ((Socket.Event) -> ())?
         
         var isExecuting = false
