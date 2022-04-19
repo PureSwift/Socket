@@ -100,7 +100,7 @@ internal actor SocketManager {
             assertionFailure("Unknown socket")
             throw Errno.invalidArgument
         }
-        let nanoseconds = Socket.configuration.writeInterval
+        let nanoseconds = Socket.configuration.readInterval
         try await wait(for: .read, fileDescriptor: fileDescriptor, sleep: nanoseconds)
         return try await socket.read(length: length, sleep: nanoseconds)
     }
