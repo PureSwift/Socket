@@ -223,9 +223,7 @@ extension SocketManager.SocketState {
     func write(data: Data, sleep nanoseconds: UInt64 = 10_000_000) async throws -> Int {
         try await execute(sleep: nanoseconds) {
             log("Will write \(data.count) bytes to \(fileDescriptor)")
-            let byteCount = try data.withUnsafeBytes {
-                try fileDescriptor.write($0)
-            }
+            let byteCount = try await fileDescriptor.write(data)
             // notify
             event?(.write(byteCount))
             return byteCount
@@ -236,9 +234,7 @@ extension SocketManager.SocketState {
         try await execute(sleep: nanoseconds) {
             log("Will read \(length) bytes to \(fileDescriptor)")
             var data = Data(count: length)
-            let bytesRead = try data.withUnsafeMutableBytes {
-                try fileDescriptor.read(into: $0)
-            }
+            let bytesRead = try await fileDescriptor.read(into: &data)
             if bytesRead < length {
                 data = data.prefix(bytesRead)
             }
