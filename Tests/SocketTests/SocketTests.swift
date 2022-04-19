@@ -10,12 +10,12 @@ final class SocketTests: XCTestCase {
         let socketA = try await Socket(
             fileDescriptor: .socket(UnixProtocol.raw, bind: address)
         )
-        defer { socketA.close() }
+        defer { Task { await socketA.close() } }
         
         let socketB = try await Socket(
             fileDescriptor: .socket(UnixProtocol.raw, bind: address)
         )
-        defer { socketB.close() }
+        defer { Task { await socketB.close() } }
         
         let data = Data("Test \(UUID())".utf8)
         
@@ -31,15 +31,18 @@ final class SocketTests: XCTestCase {
         let server = try await Socket(
             fileDescriptor: .socket(IPv4Protocol.tcp, bind: address)
         )
-        defer { server.close() }
-        NSLog("Server: Created server socket")
+        defer { Task { await server.close() } }
+        NSLog("Server: Created server socket \(server.fileDescriptor)")
         try server.fileDescriptor.listen(backlog: 10)
         
         Task {
+            NSLog("Server: Waiting on incoming connection")
             do {
-                let newConnection = try await server.fileDescriptor.accept()
-                defer { try? newConnection.close() }
-                NSLog("Server: Got incoming connection")
+                let newConnection = await Socket(
+                    fileDescriptor: try await server.fileDescriptor.accept()
+                )
+                //defer { Task { await newConnection.close() } }
+                NSLog("Server: Got incoming connection \(newConnection.fileDescriptor)")
                 let _ = try await newConnection.write(data)
                 NSLog("Server: Wrote outgoing data")
             } catch {
@@ -48,11 +51,11 @@ final class SocketTests: XCTestCase {
             }
         }
         
-        NSLog("Client: Created client socket")
         let client = try await Socket(
             fileDescriptor: .socket(IPv4Protocol.tcp)
         )
-        defer { client.close() }
+        defer { Task { await client.close() } }
+        NSLog("Client: Created client socket \(client.fileDescriptor)")
         
         NSLog("Client: Will connect to server")
         try await client.fileDescriptor.connect(to: address, sleep: 100_000_000)

@@ -62,10 +62,8 @@ public struct Socket {
         try await manager.read(length, for: fileDescriptor)
     }
     
-    public func close() {
-        Task(priority: Task.currentPriority) {
-            await manager.remove(fileDescriptor)
-        }
+    public func close() async {
+        await manager.remove(fileDescriptor)
     }
     
     private func setNonBlock() throws {
