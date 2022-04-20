@@ -85,8 +85,8 @@ internal actor SocketManager {
     @discardableResult
     internal func write(_ data: Data, for fileDescriptor: FileDescriptor) async throws -> Int {
         guard let socket = sockets[fileDescriptor] else {
-            log("Unkown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket")
+            log("Unable to write unkown socket \(fileDescriptor).")
+            assertionFailure("Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
         let nanoseconds = Socket.configuration.writeInterval
@@ -96,8 +96,8 @@ internal actor SocketManager {
     
     internal func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
         guard let socket = sockets[fileDescriptor] else {
-            log("Unkown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket")
+            log("Unable to read unkown socket \(fileDescriptor).")
+            assertionFailure("Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
         let nanoseconds = Socket.configuration.readInterval
