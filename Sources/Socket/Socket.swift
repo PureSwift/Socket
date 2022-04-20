@@ -51,6 +51,10 @@ public struct Socket {
     
     // MARK: - Methods
     
+    public func setEvent(_ event: ((Event) -> ())?) async throws {
+        try await manager.setEvent(event, for: fileDescriptor)
+    }
+    
     /// Write to socket
     @discardableResult
     public func write(_ data: Data) async throws -> Int {

@@ -68,7 +68,7 @@ internal actor SocketManager {
         startMonitoring()
     }
     
-    func remove(_ fileDescriptor: FileDescriptor, error: Error? = nil) {
+    func remove(_ fileDescriptor: FileDescriptor, error: Error? = nil) async {
         guard let socket = sockets[fileDescriptor] else {
             return // could have been removed by `poll()`
         }
@@ -79,7 +79,7 @@ internal actor SocketManager {
         // close actual socket
         try? fileDescriptor.close()
         // notify
-        socket.event?(.close(error))
+        await socket.event?(.close(error))
     }
     
     @discardableResult
@@ -103,6 +103,24 @@ internal actor SocketManager {
         let nanoseconds = Socket.configuration.readInterval
         try await wait(for: .read, fileDescriptor: fileDescriptor, sleep: nanoseconds)
         return try await socket.read(length: length, sleep: nanoseconds)
+    }
+    
+    internal func setEvent(_ event: ((Socket.Event) -> ())?, for fileDescriptor: FileDescriptor) async throws {
+        guard let socket = sockets[fileDescriptor] else {
+            log("Unkown socket \(fileDescriptor).")
+            assertionFailure("Unknown socket")
+            throw Errno.invalidArgument
+        }
+        await socket.setEvent(event)
+    }
+    
+    internal func event(for fileDescriptor: FileDescriptor) async throws -> ((Socket.Event) -> ())? {
+        guard let socket = sockets[fileDescriptor] else {
+            log("Unkown socket \(fileDescriptor).")
+            assertionFailure("Unknown socket")
+            throw Errno.invalidArgument
+        }
+        return await socket.event
     }
     
     internal func events(for fileDescriptor: FileDescriptor) -> FileEvents {
@@ -170,7 +188,7 @@ internal actor SocketManager {
             assertionFailure("Unknown socket")
             return
         }
-        self.remove(fileDescriptor, error: error)
+        await self.remove(fileDescriptor, error: error)
     }
     
     private func shouldRead(_ fileDescriptor: FileDescriptor) async {
@@ -180,7 +198,7 @@ internal actor SocketManager {
             return
         }
         // notify
-        socket.event?(.pendingRead)
+        await socket.event?(.pendingRead)
     }
 }
 
@@ -192,7 +210,7 @@ extension SocketManager {
         
         let fileDescriptor: FileDescriptor
         
-        let event: ((Socket.Event) -> ())?
+        var event: ((Socket.Event) -> ())?
         
         var isExecuting = false
         
@@ -201,6 +219,10 @@ extension SocketManager {
         ) {
             self.fileDescriptor = fileDescriptor
             self.event = event
+        }
+        
+        func setEvent(_ newValue: ((Socket.Event) -> ())?) {
+            self.event = newValue
         }
     }
 }
