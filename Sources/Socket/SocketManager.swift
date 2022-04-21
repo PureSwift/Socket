@@ -72,7 +72,7 @@ internal actor SocketManager {
         guard let socket = sockets[fileDescriptor] else {
             return // could have been removed by `poll()`
         }
-        log("Remove socket \(fileDescriptor).")
+        log("Remove socket \(fileDescriptor) \(error?.localizedDescription ?? "")")
         // update sockets to monitor
         sockets[fileDescriptor] = nil
         updatePollDescriptors()
@@ -107,7 +107,7 @@ internal actor SocketManager {
     
     internal func setEvent(_ event: ((Socket.Event) -> ())?, for fileDescriptor: FileDescriptor) async throws {
         guard let socket = sockets[fileDescriptor] else {
-            log("Unable to set event for unkown socket \(fileDescriptor).")
+            log("Unable to set event for unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
@@ -184,7 +184,7 @@ internal actor SocketManager {
     
     private func error(_ error: Errno, for fileDescriptor: FileDescriptor) async {
         guard let _ = self.sockets[fileDescriptor] else {
-            log("Unkown socket \(fileDescriptor).")
+            log("Unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) \(error) Unknown socket \(fileDescriptor)")
             return
         }
@@ -193,7 +193,7 @@ internal actor SocketManager {
     
     private func shouldRead(_ fileDescriptor: FileDescriptor) async {
         guard let socket = self.sockets[fileDescriptor] else {
-            log("Pending read for Unkown socket \(fileDescriptor).")
+            log("Pending read for unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             return
         }
