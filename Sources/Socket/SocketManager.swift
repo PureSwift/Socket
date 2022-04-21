@@ -183,11 +183,6 @@ internal actor SocketManager {
     }
     
     private func error(_ error: Errno, for fileDescriptor: FileDescriptor) async {
-        guard let _ = self.sockets[fileDescriptor] else {
-            log("Unknown socket \(fileDescriptor).")
-            assertionFailure("\(#function) \(error) Unknown socket \(fileDescriptor)")
-            return
-        }
         await self.remove(fileDescriptor, error: error)
     }
     
