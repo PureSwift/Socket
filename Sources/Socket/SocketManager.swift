@@ -85,8 +85,8 @@ internal actor SocketManager {
     @discardableResult
     internal func write(_ data: Data, for fileDescriptor: FileDescriptor) async throws -> Int {
         guard let socket = sockets[fileDescriptor] else {
-            log("Unable to write unkown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket \(fileDescriptor)")
+            log("Unable to write unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
         let nanoseconds = Socket.configuration.writeInterval
@@ -96,8 +96,8 @@ internal actor SocketManager {
     
     internal func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
         guard let socket = sockets[fileDescriptor] else {
-            log("Unable to read unkown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket \(fileDescriptor)")
+            log("Unable to read unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
         let nanoseconds = Socket.configuration.readInterval
@@ -107,8 +107,8 @@ internal actor SocketManager {
     
     internal func setEvent(_ event: ((Socket.Event) -> ())?, for fileDescriptor: FileDescriptor) async throws {
         guard let socket = sockets[fileDescriptor] else {
-            log("Unkown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket")
+            log("Unable to set event for unkown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
         await socket.setEvent(event)
@@ -116,8 +116,8 @@ internal actor SocketManager {
     
     internal func event(for fileDescriptor: FileDescriptor) async throws -> ((Socket.Event) -> ())? {
         guard let socket = sockets[fileDescriptor] else {
-            log("Unkown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket")
+            log("Unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
         return await socket.event
@@ -125,8 +125,8 @@ internal actor SocketManager {
     
     internal func events(for fileDescriptor: FileDescriptor) -> FileEvents {
         guard let poll = pollDescriptors.first(where: { $0.fileDescriptor == fileDescriptor }) else {
-            log("Unkown socket \(fileDescriptor).")
-            assertionFailure()
+            log("Unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             return []
         }
         return poll.returnedEvents
@@ -185,7 +185,7 @@ internal actor SocketManager {
     private func error(_ error: Errno, for fileDescriptor: FileDescriptor) async {
         guard let _ = self.sockets[fileDescriptor] else {
             log("Unkown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket")
+            assertionFailure("\(#function) \(error) Unknown socket \(fileDescriptor)")
             return
         }
         await self.remove(fileDescriptor, error: error)
@@ -193,8 +193,8 @@ internal actor SocketManager {
     
     private func shouldRead(_ fileDescriptor: FileDescriptor) async {
         guard let socket = self.sockets[fileDescriptor] else {
-            log("Unkown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket")
+            log("Pending read for Unkown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             return
         }
         // notify
