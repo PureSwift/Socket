@@ -123,9 +123,9 @@ internal actor SocketManager {
         return await socket.event
     }
     
-    internal func events(for fileDescriptor: FileDescriptor) throws -> FileEvents {
+    private func events(for fileDescriptor: FileDescriptor) -> FileEvents {
         guard let poll = pollDescriptors.first(where: { $0.fileDescriptor == fileDescriptor }) else {
-            throw Errno.connectionAbort
+            return []
         }
         return poll.returnedEvents
     }
@@ -136,12 +136,15 @@ internal actor SocketManager {
         sleep nanoseconds: UInt64 = 10_000_000
     ) async throws {
         repeat {
+            guard contains(fileDescriptor) else {
+                throw Errno.connectionAbort
+            }
             try Task.checkCancellation()
             try await self.poll()
-            if try events(for: fileDescriptor).contains(event) == false {
+            if events(for: fileDescriptor).contains(event) == false {
                 try await Task.sleep(nanoseconds: nanoseconds)
             }
-        } while try events(for: fileDescriptor).contains(event) == false
+        } while events(for: fileDescriptor).contains(event) == false
     }
     
     private func updatePollDescriptors() {
