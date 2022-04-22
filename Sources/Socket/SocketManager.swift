@@ -164,21 +164,24 @@ internal actor SocketManager {
             throw error
         }
         
-        for poll in pollDescriptors {
-            let fileEvents = poll.returnedEvents
-            let fileDescriptor = poll.fileDescriptor
-            if fileEvents.contains(.read) {
-                await shouldRead(fileDescriptor)
-            }
-            if fileEvents.contains(.invalidRequest) {
-                assertionFailure()
-                await error(.badFileDescriptor, for: fileDescriptor)
-            }
-            if fileEvents.contains(.hangup) {
-                await error(.connectionReset, for: fileDescriptor)
-            }
-            if fileEvents.contains(.error) {
-                await error(.connectionAbort, for: fileDescriptor)
+        // wait for concurrent handling
+        await withTaskGroup(of: Void.self) { [unowned self] taskGroup in
+            for poll in pollDescriptors {
+                taskGroup.addTask {
+                    if poll.returnedEvents.contains(.read) {
+                        await self.shouldRead(poll.fileDescriptor)
+                    }
+                    if poll.returnedEvents.contains(.invalidRequest) {
+                        assertionFailure("Polled for invalid socket \(poll.fileDescriptor)")
+                        await self.error(.badFileDescriptor, for: poll.fileDescriptor)
+                    }
+                    if poll.returnedEvents.contains(.hangup) {
+                        await self.error(.connectionReset, for: poll.fileDescriptor)
+                    }
+                    if poll.returnedEvents.contains(.error) {
+                        await self.error(.connectionAbort, for: poll.fileDescriptor)
+                    }
+                }
             }
         }
     }
