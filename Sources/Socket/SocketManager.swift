@@ -138,8 +138,12 @@ internal actor SocketManager {
         }
         // poll immediately and try to read / write
         try await poll()
-        // wait until event is polled
+        // wait until event is polled (with continuation)
         while try events(for: fileDescriptor).contains(event) == false {
+            try Task.checkCancellation()
+            guard contains(fileDescriptor) else {
+                throw Errno.connectionAbort
+            }
             try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Error>) in
                 Task { [weak socket] in
                     guard let socket = socket else {
@@ -151,6 +155,17 @@ internal actor SocketManager {
             }
             try await poll()
         }
+        // wait via sleeping
+        repeat {
+            guard contains(fileDescriptor) else {
+                throw Errno.connectionAbort
+            }
+            try Task.checkCancellation()
+            try await self.poll()
+            if try events(for: fileDescriptor).contains(event) == false {
+                try await Task.sleep(nanoseconds: 10_000_000)
+            }
+        } while try events(for: fileDescriptor).contains(event) == false
     }
     
     private func updatePollDescriptors() {
