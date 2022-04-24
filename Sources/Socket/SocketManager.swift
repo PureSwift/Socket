@@ -90,21 +90,8 @@ internal actor SocketManager {
             throw Errno.invalidArgument
         }
         // attempt to execute immediately
-        let event: FileEvents = .write
-        try await poll()
-        // wait until event is recieved
-        if try events(for: fileDescriptor).contains(event) == false {
-            try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Error>) in
-                Task { [weak socket] in
-                    guard let socket = socket else {
-                        continuation.resume(throwing: Errno.connectionAbort)
-                        return
-                    }
-                    await socket.queue(event: event, continuation)
-                }
-            }
-        }
-        return try await socket.write(data: data)
+        try await wait(for: .write, fileDescriptor: fileDescriptor)
+        return try await socket.write(data)
     }
     
     internal func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
@@ -114,21 +101,8 @@ internal actor SocketManager {
             throw Errno.invalidArgument
         }
         // attempt to execute immediately
-        let event: FileEvents = .read
-        try await poll()
-        // wait until event is recieved
-        if try events(for: fileDescriptor).contains(event) == false {
-            try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Error>) in
-                Task { [weak socket] in
-                    guard let socket = socket else {
-                        continuation.resume(throwing: Errno.connectionAbort)
-                        return
-                    }
-                    await socket.queue(event: event, continuation)
-                }
-            }
-        }
-        return try await socket.read(length: length)
+        try await wait(for: .read, fileDescriptor: fileDescriptor)
+        return try await socket.read(length)
     }
     
     internal func setEvent(_ event: ((Socket.Event) -> ())?, for fileDescriptor: FileDescriptor) async throws {
@@ -154,6 +128,29 @@ internal actor SocketManager {
             throw Errno.connectionAbort
         }
         return poll.returnedEvents
+    }
+    
+    private func wait(for event: FileEvents, fileDescriptor: FileDescriptor) async throws {
+        guard let socket = sockets[fileDescriptor] else {
+            log("Unable to wait for unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
+            throw Errno.invalidArgument
+        }
+        // poll immediately and try to read / write
+        try await poll()
+        // wait until event is polled
+        while try events(for: fileDescriptor).contains(event) == false {
+            try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Error>) in
+                Task { [weak socket] in
+                    guard let socket = socket else {
+                        continuation.resume(throwing: Errno.connectionAbort)
+                        return
+                    }
+                    await socket.queue(event: event, continuation)
+                }
+            }
+            try await poll()
+        }
     }
     
     private func updatePollDescriptors() {
@@ -205,9 +202,7 @@ internal actor SocketManager {
             return
         }
         // stop waiting
-        if await socket.isExecuting == false {
-            await socket.dequeue(event: .read)?.resume()
-        }
+        await socket.dequeue(event: .read)?.resume()
         // notify
         await socket.event?(.pendingRead)
     }
@@ -219,9 +214,7 @@ internal actor SocketManager {
             return
         }
         // stop waiting
-        if await socket.isExecuting == false {
-            await socket.dequeue(event: .write)?.resume()
-        }
+        await socket.dequeue(event: .write)?.resume()
     }
 }
 
@@ -234,9 +227,7 @@ extension SocketManager {
         let fileDescriptor: FileDescriptor
         
         var event: ((Socket.Event) -> ())?
-        
-        var isExecuting = false
-        
+                
         private var pendingEvent = [FileEvents: [SocketContinuation<(), Error>]]()
         
         init(fileDescriptor: FileDescriptor,
@@ -274,44 +265,27 @@ extension SocketManager {
 
 extension SocketManager.SocketState {
     
-    // locks the socket
-    private func execute<T>(
-        sleep nanoseconds: UInt64 = 10_000_000,
-        _ block: () async throws -> (T)
-    ) async throws -> T {
-        while isExecuting {
-            try await Task.sleep(nanoseconds: nanoseconds)
+    func write(_ data: Data) throws -> Int {
+        log("Will write \(data.count) bytes to \(fileDescriptor)")
+        let byteCount = try data.withUnsafeBytes {
+            try fileDescriptor.write($0)
         }
-        isExecuting = true
-        defer { isExecuting = false }
-        return try await block()
+        // notify
+        event?(.write(byteCount))
+        return byteCount
     }
     
-    func write(data: Data, sleep nanoseconds: UInt64 = 100_000_000) async throws -> Int {
-        try await execute(sleep: nanoseconds) {
-            log("Will write \(data.count) bytes to \(fileDescriptor)")
-            let byteCount = try data.withUnsafeBytes {
-                try fileDescriptor.write($0)
-            }
-            // notify
-            event?(.write(byteCount))
-            return byteCount
+    func read(_ length: Int) throws -> Data {
+        log("Will read \(length) bytes to \(fileDescriptor)")
+        var data = Data(count: length)
+        let bytesRead = try data.withUnsafeMutableBytes {
+            try fileDescriptor.read(into: $0)
         }
-    }
-    
-    func read(length: Int, sleep nanoseconds: UInt64 = 100_000_000) async throws -> Data {
-        try await execute(sleep: nanoseconds) {
-            log("Will read \(length) bytes to \(fileDescriptor)")
-            var data = Data(count: length)
-            let bytesRead = try data.withUnsafeMutableBytes {
-                try fileDescriptor.read(into: $0)
-            }
-            if bytesRead < length {
-                data = data.prefix(bytesRead)
-            }
-            // notify
-            event?(.read(bytesRead))
-            return data
+        if bytesRead < length {
+            data = data.prefix(bytesRead)
         }
+        // notify
+        event?(.read(bytesRead))
+        return data
     }
 }
