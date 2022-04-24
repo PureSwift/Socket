@@ -77,7 +77,7 @@ internal func withContinuation<T>(
     function: String = #function,
     _ body: (UnsafeContinuation<T, Never>) -> Void
 ) async -> T {
-    return await withUnsafeContinuation(function: function, body)
+    return await withUnsafeContinuation(body)
 }
 
 @inline(__always)
@@ -86,6 +86,6 @@ internal func withThrowingContinuation<T>(
     function: String = #function,
     _ body: (UnsafeContinuation<T, Swift.Error>) -> Void
 ) async throws -> T {
-    return try await withUnsafeThrowingContinuation(function: function, body)
+    return try await withUnsafeThrowingContinuation(body)
 }
 #endif
