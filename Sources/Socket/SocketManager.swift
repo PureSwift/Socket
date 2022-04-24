@@ -209,7 +209,9 @@ internal actor SocketManager {
             return
         }
         // stop waiting
-        await socket.dequeue(event: .read)?.resume()
+        if await socket.isBusy == false {
+            await socket.dequeue(event: .read)?.resume()
+        }
         // notify
         await socket.event?(.pendingRead)
     }
@@ -221,7 +223,9 @@ internal actor SocketManager {
             return
         }
         // stop waiting
-        await socket.dequeue(event: .write)?.resume()
+        if await socket.isBusy == false {
+            await socket.dequeue(event: .write)?.resume()
+        }
     }
 }
 
@@ -234,6 +238,8 @@ extension SocketManager {
         let fileDescriptor: FileDescriptor
         
         var event: ((Socket.Event) -> ())?
+        
+        public var isBusy = false
         
         private var pendingEvent = [FileEvents: [SocketContinuation<(), Error>]]()
         
@@ -273,6 +279,9 @@ extension SocketManager {
 extension SocketManager.SocketState {
     
     func write(_ data: Data) async throws -> Int {
+        assert(isBusy == false)
+        isBusy = true
+        defer { isBusy = false }
         log("Will write \(data.count) bytes to \(fileDescriptor)")
         let byteCount = try data.withUnsafeBytes {
             try fileDescriptor.write($0)
@@ -283,6 +292,9 @@ extension SocketManager.SocketState {
     }
     
     func read(_ length: Int) async throws -> Data {
+        assert(isBusy == false)
+        isBusy = true
+        defer { isBusy = false }
         log("Will read \(length) bytes to \(fileDescriptor)")
         var data = Data(count: length)
         let bytesRead = try data.withUnsafeMutableBytes {
