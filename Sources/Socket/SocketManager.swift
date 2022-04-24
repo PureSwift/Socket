@@ -104,7 +104,7 @@ internal actor SocketManager {
                 }
             }
         }
-        return try await socket.write(data)
+        return try await socket.write(data: data)
     }
     
     internal func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
@@ -128,7 +128,7 @@ internal actor SocketManager {
                 }
             }
         }
-        return try await socket.read(length)
+        return try await socket.read(length: length)
     }
     
     internal func setEvent(_ event: ((Socket.Event) -> ())?, for fileDescriptor: FileDescriptor) async throws {
@@ -205,7 +205,7 @@ internal actor SocketManager {
             return
         }
         // stop waiting
-        if await socket.isBusy == false {
+        if await socket.isExecuting == false {
             await socket.dequeue(event: .read)?.resume()
         }
         // notify
@@ -219,7 +219,7 @@ internal actor SocketManager {
             return
         }
         // stop waiting
-        if await socket.isBusy == false {
+        if await socket.isExecuting == false {
             await socket.dequeue(event: .write)?.resume()
         }
     }
@@ -235,7 +235,7 @@ extension SocketManager {
         
         var event: ((Socket.Event) -> ())?
         
-        public var isBusy = false
+        var isExecuting = false
         
         private var pendingEvent = [FileEvents: [SocketContinuation<(), Error>]]()
         
@@ -274,33 +274,44 @@ extension SocketManager {
 
 extension SocketManager.SocketState {
     
-    func write(_ data: Data) throws -> Int {
-        assert(isBusy == false)
-        isBusy = true
-        defer { isBusy = false }
-        log("Will write \(data.count) bytes to \(fileDescriptor)")
-        let byteCount = try data.withUnsafeBytes {
-            try fileDescriptor.write($0)
+    // locks the socket
+    private func execute<T>(
+        sleep nanoseconds: UInt64 = 10_000_000,
+        _ block: () async throws -> (T)
+    ) async throws -> T {
+        while isExecuting {
+            try await Task.sleep(nanoseconds: nanoseconds)
         }
-        // notify
-        event?(.write(byteCount))
-        return byteCount
+        isExecuting = true
+        defer { isExecuting = false }
+        return try await block()
     }
     
-    func read(_ length: Int) throws -> Data {
-        assert(isBusy == false)
-        isBusy = true
-        defer { isBusy = false }
-        log("Will read \(length) bytes to \(fileDescriptor)")
-        var data = Data(count: length)
-        let bytesRead = try data.withUnsafeMutableBytes {
-            try fileDescriptor.read(into: $0)
+    func write(data: Data, sleep nanoseconds: UInt64 = 100_000_000) async throws -> Int {
+        try await execute(sleep: nanoseconds) {
+            log("Will write \(data.count) bytes to \(fileDescriptor)")
+            let byteCount = try data.withUnsafeBytes {
+                try fileDescriptor.write($0)
+            }
+            // notify
+            event?(.write(byteCount))
+            return byteCount
         }
-        if bytesRead < length {
-            data = data.prefix(bytesRead)
+    }
+    
+    func read(length: Int, sleep nanoseconds: UInt64 = 100_000_000) async throws -> Data {
+        try await execute(sleep: nanoseconds) {
+            log("Will read \(length) bytes to \(fileDescriptor)")
+            var data = Data(count: length)
+            let bytesRead = try data.withUnsafeMutableBytes {
+                try fileDescriptor.read(into: $0)
+            }
+            if bytesRead < length {
+                data = data.prefix(bytesRead)
+            }
+            // notify
+            event?(.read(bytesRead))
+            return data
         }
-        // notify
-        event?(.read(bytesRead))
-        return data
     }
 }
