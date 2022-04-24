@@ -69,13 +69,13 @@ internal func withThrowingContinuation<T>(
     }
 }
 #else
-internal typealias SocketContinuation<T, E> = CheckedContinuation<T, E> where E: Error
+internal typealias SocketContinuation<T, E> = UnsafeContinuation<T, E> where E: Error
 
 @inline(__always)
 internal func withContinuation<T>(
     for fileDescriptor: FileDescriptor,
     function: String = #function,
-    _ body: (UnsafeContinuation<T, Never>) -> Void
+    _ body: (SocketContinuation<T, Never>) -> Void
 ) async -> T {
     return await withUnsafeContinuation(body)
 }
@@ -84,7 +84,7 @@ internal func withContinuation<T>(
 internal func withThrowingContinuation<T>(
     for fileDescriptor: FileDescriptor,
     function: String = #function,
-    _ body: (UnsafeContinuation<T, Swift.Error>) -> Void
+    _ body: (SocketContinuation<T, Swift.Error>) -> Void
 ) async throws -> T {
     return try await withUnsafeThrowingContinuation(body)
 }
