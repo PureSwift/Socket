@@ -174,26 +174,22 @@ internal actor SocketManager {
         }
         
         // wait for concurrent handling
-        await withTaskGroup(of: Void.self) { [unowned self] taskGroup in
-            for poll in pollDescriptors {
-                taskGroup.addTask {
-                    if poll.returnedEvents.contains(.write) {
-                        await self.canWrite(poll.fileDescriptor)
-                    }
-                    if poll.returnedEvents.contains(.read) {
-                        await self.shouldRead(poll.fileDescriptor)
-                    }
-                    if poll.returnedEvents.contains(.invalidRequest) {
-                        assertionFailure("Polled for invalid socket \(poll.fileDescriptor)")
-                        await self.error(.badFileDescriptor, for: poll.fileDescriptor)
-                    }
-                    if poll.returnedEvents.contains(.hangup) {
-                        await self.error(.connectionReset, for: poll.fileDescriptor)
-                    }
-                    if poll.returnedEvents.contains(.error) {
-                        await self.error(.connectionAbort, for: poll.fileDescriptor)
-                    }
-                }
+        for poll in pollDescriptors {
+            if poll.returnedEvents.contains(.write) {
+                await self.canWrite(poll.fileDescriptor)
+            }
+            if poll.returnedEvents.contains(.read) {
+                await self.shouldRead(poll.fileDescriptor)
+            }
+            if poll.returnedEvents.contains(.invalidRequest) {
+                assertionFailure("Polled for invalid socket \(poll.fileDescriptor)")
+                await self.error(.badFileDescriptor, for: poll.fileDescriptor)
+            }
+            if poll.returnedEvents.contains(.hangup) {
+                await self.error(.connectionReset, for: poll.fileDescriptor)
+            }
+            if poll.returnedEvents.contains(.error) {
+                await self.error(.connectionAbort, for: poll.fileDescriptor)
             }
         }
     }
@@ -278,7 +274,7 @@ extension SocketManager {
 
 extension SocketManager.SocketState {
     
-    func write(_ data: Data) async throws -> Int {
+    func write(_ data: Data) throws -> Int {
         assert(isBusy == false)
         isBusy = true
         defer { isBusy = false }
@@ -291,7 +287,7 @@ extension SocketManager.SocketState {
         return byteCount
     }
     
-    func read(_ length: Int) async throws -> Data {
+    func read(_ length: Int) throws -> Data {
         assert(isBusy == false)
         isBusy = true
         defer { isBusy = false }
