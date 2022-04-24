@@ -103,11 +103,5 @@ public extension Socket {
         
         /// Interval in nanoseconds for monitoring / polling socket.
         public var monitorInterval: UInt64 = 100_000_000
-        
-        /// Interval in nanoseconds for polling socket when reading.
-        public var readInterval: UInt64 = 100_000_000
-        
-        /// Interval in nanoseconds for polling socket when writing.
-        public var writeInterval: UInt64 = 10_000_000
     }
 }

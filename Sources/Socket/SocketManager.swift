@@ -77,7 +77,7 @@ internal actor SocketManager {
         sockets[fileDescriptor] = nil
         updatePollDescriptors()
         // close actual socket
-        try? fileDescriptor.close()
+        await socket.close(error ?? Errno.connectionAbort)
         // notify
         await socket.event?(.close(error))
     }
@@ -89,9 +89,22 @@ internal actor SocketManager {
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
-        let nanoseconds = Socket.configuration.writeInterval
-        try await wait(for: .write, fileDescriptor: fileDescriptor, sleep: nanoseconds)
-        return try await socket.write(data: data, sleep: nanoseconds)
+        // attempt to execute immediately
+        let event: FileEvents = .write
+        try await poll()
+        // wait until event is recieved
+        if try events(for: fileDescriptor).contains(event) == false {
+            try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Error>) in
+                Task { [weak socket] in
+                    guard let socket = socket else {
+                        continuation.resume(throwing: Errno.connectionAbort)
+                        return
+                    }
+                    await socket.queue(event: event, continuation)
+                }
+            }
+        }
+        return try await socket.write(data)
     }
     
     internal func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
@@ -100,9 +113,22 @@ internal actor SocketManager {
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
-        let nanoseconds = Socket.configuration.readInterval
-        try await wait(for: .read, fileDescriptor: fileDescriptor, sleep: nanoseconds)
-        return try await socket.read(length: length, sleep: nanoseconds)
+        // attempt to execute immediately
+        let event: FileEvents = .read
+        try await poll()
+        // wait until event is recieved
+        if try events(for: fileDescriptor).contains(event) == false {
+            try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Error>) in
+                Task { [weak socket] in
+                    guard let socket = socket else {
+                        continuation.resume(throwing: Errno.connectionAbort)
+                        return
+                    }
+                    await socket.queue(event: event, continuation)
+                }
+            }
+        }
+        return try await socket.read(length)
     }
     
     internal func setEvent(_ event: ((Socket.Event) -> ())?, for fileDescriptor: FileDescriptor) async throws {
@@ -123,28 +149,11 @@ internal actor SocketManager {
         return await socket.event
     }
     
-    private func events(for fileDescriptor: FileDescriptor) -> FileEvents {
+    private func events(for fileDescriptor: FileDescriptor) throws -> FileEvents {
         guard let poll = pollDescriptors.first(where: { $0.fileDescriptor == fileDescriptor }) else {
-            return []
+            throw Errno.connectionAbort
         }
         return poll.returnedEvents
-    }
-    
-    private func wait(
-        for event: FileEvents,
-        fileDescriptor: FileDescriptor,
-        sleep nanoseconds: UInt64 = 10_000_000
-    ) async throws {
-        repeat {
-            guard contains(fileDescriptor) else {
-                throw Errno.connectionAbort
-            }
-            try Task.checkCancellation()
-            try await self.poll()
-            if events(for: fileDescriptor).contains(event) == false {
-                try await Task.sleep(nanoseconds: nanoseconds)
-            }
-        } while events(for: fileDescriptor).contains(event) == false
     }
     
     private func updatePollDescriptors() {
@@ -154,7 +163,7 @@ internal actor SocketManager {
             .map { FileDescriptor.Poll(fileDescriptor: $0, events: .socket) }
     }
     
-    internal func poll() async throws {
+    private func poll() async throws {
         pollDescriptors.reset()
         do {
             try pollDescriptors.poll()
@@ -168,6 +177,9 @@ internal actor SocketManager {
         await withTaskGroup(of: Void.self) { [unowned self] taskGroup in
             for poll in pollDescriptors {
                 taskGroup.addTask {
+                    if poll.returnedEvents.contains(.write) {
+                        await self.canWrite(poll.fileDescriptor)
+                    }
                     if poll.returnedEvents.contains(.read) {
                         await self.shouldRead(poll.fileDescriptor)
                     }
@@ -196,8 +208,20 @@ internal actor SocketManager {
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             return
         }
+        // stop waiting
+        await socket.dequeue(event: .read)?.resume()
         // notify
         await socket.event?(.pendingRead)
+    }
+    
+    private func canWrite(_ fileDescriptor: FileDescriptor) async {
+        guard let socket = self.sockets[fileDescriptor] else {
+            log("Can write for unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
+            return
+        }
+        // stop waiting
+        await socket.dequeue(event: .write)?.resume()
     }
 }
 
@@ -211,7 +235,7 @@ extension SocketManager {
         
         var event: ((Socket.Event) -> ())?
         
-        var isExecuting = false
+        private var pendingEvent = [FileEvents: [SocketContinuation<(), Error>]]()
         
         init(fileDescriptor: FileDescriptor,
              event: ((Socket.Event) -> ())? = nil
@@ -220,52 +244,55 @@ extension SocketManager {
             self.event = event
         }
         
+        func close(_ error: Error) {
+            // cancel all continuations
+            for event in pendingEvent.keys {
+                dequeue(event: event)?.resume(throwing: error)
+            }
+            // close underlying socket
+            try? fileDescriptor.close()
+        }
+        
         func setEvent(_ newValue: ((Socket.Event) -> ())?) {
             self.event = newValue
+        }
+        
+        func queue(event: FileEvents, _ continuation: SocketContinuation<(), Error>) {
+            pendingEvent[event, default: []].append(continuation)
+        }
+        
+        func dequeue(event: FileEvents) -> SocketContinuation<(), Error>? {
+            guard pendingEvent[event, default: []].isEmpty == false else {
+                return nil
+            }
+            return pendingEvent[event, default: []].removeFirst()
         }
     }
 }
 
 extension SocketManager.SocketState {
     
-    // locks the socket
-    private func execute<T>(
-        sleep nanoseconds: UInt64 = 10_000_000,
-        _ block: () async throws -> (T)
-    ) async throws -> T {
-        while isExecuting {
-            try await Task.sleep(nanoseconds: nanoseconds)
+    func write(_ data: Data) async throws -> Int {
+        log("Will write \(data.count) bytes to \(fileDescriptor)")
+        let byteCount = try data.withUnsafeBytes {
+            try fileDescriptor.write($0)
         }
-        isExecuting = true
-        defer { isExecuting = false }
-        return try await block()
+        // notify
+        event?(.write(byteCount))
+        return byteCount
     }
     
-    func write(data: Data, sleep nanoseconds: UInt64 = 10_000_000) async throws -> Int {
-        try await execute(sleep: nanoseconds) {
-            log("Will write \(data.count) bytes to \(fileDescriptor)")
-            let byteCount = try data.withUnsafeBytes {
-                try fileDescriptor.write($0)
-            }
-            // notify
-            event?(.write(byteCount))
-            return byteCount
+    func read(_ length: Int) async throws -> Data {
+        log("Will read \(length) bytes to \(fileDescriptor)")
+        var data = Data(count: length)
+        let bytesRead = try data.withUnsafeMutableBytes {
+            try fileDescriptor.read(into: $0)
         }
-    }
-    
-    func read(length: Int, sleep nanoseconds: UInt64 = 10_000_000) async throws -> Data {
-        try await execute(sleep: nanoseconds) {
-            log("Will read \(length) bytes to \(fileDescriptor)")
-            var data = Data(count: length)
-            let bytesRead = try data.withUnsafeMutableBytes {
-                try fileDescriptor.read(into: $0)
-            }
-            if bytesRead < length {
-                data = data.prefix(bytesRead)
-            }
-            // notify
-            event?(.read(bytesRead))
-            return data
+        if bytesRead < length {
+            data = data.prefix(bytesRead)
         }
+        // notify
+        event?(.read(bytesRead))
+        return data
     }
 }

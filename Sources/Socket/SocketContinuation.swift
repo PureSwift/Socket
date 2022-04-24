@@ -75,17 +75,17 @@ internal typealias SocketContinuation<T, E> = CheckedContinuation<T, E> where E:
 internal func withContinuation<T>(
     for fileDescriptor: FileDescriptor,
     function: String = #function,
-    _ body: (CheckedContinuation<T, Never>) -> Void
+    _ body: (UnsafeContinuation<T, Never>) -> Void
 ) async -> T {
-    return await withCheckedContinuation(function: function, body)
+    return await withUnsafeContinuation(function: function, body)
 }
 
 @inline(__always)
 internal func withThrowingContinuation<T>(
     for fileDescriptor: FileDescriptor,
     function: String = #function,
-    _ body: (CheckedContinuation<T, Swift.Error>) -> Void
+    _ body: (UnsafeContinuation<T, Swift.Error>) -> Void
 ) async throws -> T {
-    return try await withCheckedThrowingContinuation(function: function, body)
+    return try await withUnsafeThrowingContinuation(function: function, body)
 }
 #endif
