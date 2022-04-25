@@ -97,6 +97,7 @@ internal actor SocketManager {
         await socket.dequeueAll(error ?? Errno.connectionAbort)
         // notify
         socket.event.yield(.close(error))
+        socket.event.finish()
     }
     
     @discardableResult
@@ -129,8 +130,8 @@ internal actor SocketManager {
         return poll.returnedEvents
     }
     
-    private func wait(for event: FileEvents, fileDescriptor: FileDescriptor) async throws {
-        guard let socket = sockets[fileDescriptor] else {
+    private nonisolated func wait(for event: FileEvents, fileDescriptor: FileDescriptor) async throws {
+        guard let socket = await sockets[fileDescriptor] else {
             log("Unable to wait for unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
@@ -138,9 +139,9 @@ internal actor SocketManager {
         // poll immediately and try to read / write
         try await poll()
         // wait until event is polled (with continuation)
-        while try events(for: fileDescriptor).contains(event) == false {
+        while try await events(for: fileDescriptor).contains(event) == false {
             try Task.checkCancellation()
-            guard contains(fileDescriptor) else {
+            guard await contains(fileDescriptor) else {
                 throw Errno.connectionAbort
             }
             try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Error>) in
