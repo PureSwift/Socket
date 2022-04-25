@@ -51,7 +51,7 @@ internal actor SocketManager {
     
     func add(
         _ fileDescriptor: FileDescriptor
-    ) -> Socket.EventStream {
+    ) -> Socket.Event.Stream {
         guard sockets.keys.contains(fileDescriptor) == false else {
             fatalError("Another socket for file descriptor \(fileDescriptor) already exists.")
         }
@@ -71,7 +71,7 @@ internal actor SocketManager {
         }
         
         // append socket
-        let event = Socket.EventStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+        let event = Socket.Event.Stream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             self.sockets[fileDescriptor] = SocketState(
                 fileDescriptor: fileDescriptor,
                 event: continuation
@@ -230,12 +230,12 @@ extension SocketManager {
         
         let fileDescriptor: FileDescriptor
         
-        let event: AsyncThrowingStream<Socket.Event, Error>.Continuation
+        let event: Socket.Event.Stream.Continuation
         
         private var pendingEvent = [FileEvents: [SocketContinuation<(), Error>]]()
         
         init(fileDescriptor: FileDescriptor,
-             event: AsyncThrowingStream<Socket.Event, Error>.Continuation
+             event: Socket.Event.Stream.Continuation
         ) {
             self.fileDescriptor = fileDescriptor
             self.event = event

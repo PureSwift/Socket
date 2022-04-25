@@ -14,12 +14,12 @@ public struct Socket {
     // MARK: - Properties
     
     /// Configuration for fine-tuning socket performance.
-    public static var configuration = Configuration()
+    public static var configuration = Socket.Configuration()
     
     /// Underlying file descriptor
     public let fileDescriptor: FileDescriptor
     
-    public let event: EventStream
+    public let event: Socket.Event.Stream
     
     internal unowned let manager: SocketManager
     
@@ -64,8 +64,11 @@ public extension Socket {
         case write(Int)
         case close(Error?)
     }
+}
+
+public extension Socket.Event {
     
-    typealias EventStream = AsyncThrowingStream<Event, Error>
+    typealias Stream = AsyncStream<Socket.Event>
 }
 
 public extension Socket {
