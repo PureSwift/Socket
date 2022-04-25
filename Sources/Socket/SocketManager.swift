@@ -50,22 +50,37 @@ internal actor SocketManager {
     }
     
     func add(
-        fileDescriptor: FileDescriptor,
-        event: ((Socket.Event) -> ())? = nil
-    ) {
+        _ fileDescriptor: FileDescriptor
+    ) -> Socket.EventStream {
         guard sockets.keys.contains(fileDescriptor) == false else {
-            log("Another socket for file descriptor \(fileDescriptor) already exists.")
-            assertionFailure("Another socket already exists")
-            return
+            fatalError("Another socket for file descriptor \(fileDescriptor) already exists.")
         }
         log("Add socket \(fileDescriptor).")
+        
+        // make sure its non blocking
+        do {
+            var status = try fileDescriptor.getStatus()
+            if status.contains(.nonBlocking) == false {
+                status.insert(.nonBlocking)
+                try fileDescriptor.setStatus(status)
+            }
+        }
+        catch {
+            log("Unable to set non blocking. \(error)")
+            assertionFailure("Unable to set non blocking. \(error)")
+        }
+        
         // append socket
-        sockets[fileDescriptor] = SocketState(
-            fileDescriptor: fileDescriptor,
-            event: event
-        )
+        let event = Socket.EventStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            self.sockets[fileDescriptor] = SocketState(
+                fileDescriptor: fileDescriptor,
+                event: continuation
+            )
+        }
+        // start monitoring
         updatePollDescriptors()
         startMonitoring()
+        return event
     }
     
     func remove(_ fileDescriptor: FileDescriptor, error: Error? = nil) async {
@@ -76,15 +91,17 @@ internal actor SocketManager {
         // update sockets to monitor
         sockets[fileDescriptor] = nil
         updatePollDescriptors()
-        // close actual socket
-        await socket.close(error ?? Errno.connectionAbort)
+        // close underlying socket
+        try? fileDescriptor.close()
+        // cancel all pending actions
+        await socket.dequeueAll(error ?? Errno.connectionAbort)
         // notify
-        await socket.event?(.close(error))
+        socket.event.yield(.close(error))
     }
     
     @discardableResult
-    internal func write(_ data: Data, for fileDescriptor: FileDescriptor) async throws -> Int {
-        guard let socket = sockets[fileDescriptor] else {
+    internal nonisolated func write(_ data: Data, for fileDescriptor: FileDescriptor) async throws -> Int {
+        guard let socket = await sockets[fileDescriptor] else {
             log("Unable to write unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
@@ -94,8 +111,8 @@ internal actor SocketManager {
         return try await socket.write(data)
     }
     
-    internal func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
-        guard let socket = sockets[fileDescriptor] else {
+    internal nonisolated func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
+        guard let socket = await sockets[fileDescriptor] else {
             log("Unable to read unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
@@ -103,24 +120,6 @@ internal actor SocketManager {
         // attempt to execute immediately
         try await wait(for: .read, fileDescriptor: fileDescriptor)
         return try await socket.read(length)
-    }
-    
-    internal func setEvent(_ event: ((Socket.Event) -> ())?, for fileDescriptor: FileDescriptor) async throws {
-        guard let socket = sockets[fileDescriptor] else {
-            log("Unable to set event for unknown socket \(fileDescriptor).")
-            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
-            throw Errno.invalidArgument
-        }
-        await socket.setEvent(event)
-    }
-    
-    internal func event(for fileDescriptor: FileDescriptor) async throws -> ((Socket.Event) -> ())? {
-        guard let socket = sockets[fileDescriptor] else {
-            log("Unknown socket \(fileDescriptor).")
-            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
-            throw Errno.invalidArgument
-        }
-        return await socket.event
     }
     
     private func events(for fileDescriptor: FileDescriptor) throws -> FileEvents {
@@ -208,7 +207,7 @@ internal actor SocketManager {
         // stop waiting
         await socket.dequeue(event: .read)?.resume()
         // notify
-        await socket.event?(.pendingRead)
+        socket.event.yield(.pendingRead)
     }
     
     private func canWrite(_ fileDescriptor: FileDescriptor) async {
@@ -230,28 +229,22 @@ extension SocketManager {
         
         let fileDescriptor: FileDescriptor
         
-        var event: ((Socket.Event) -> ())?
-                
+        let event: AsyncThrowingStream<Socket.Event, Error>.Continuation
+        
         private var pendingEvent = [FileEvents: [SocketContinuation<(), Error>]]()
         
         init(fileDescriptor: FileDescriptor,
-             event: ((Socket.Event) -> ())? = nil
+             event: AsyncThrowingStream<Socket.Event, Error>.Continuation
         ) {
             self.fileDescriptor = fileDescriptor
             self.event = event
         }
         
-        func close(_ error: Error) {
+        func dequeueAll(_ error: Error) {
             // cancel all continuations
             for event in pendingEvent.keys {
                 dequeue(event: event)?.resume(throwing: error)
             }
-            // close underlying socket
-            try? fileDescriptor.close()
-        }
-        
-        func setEvent(_ newValue: ((Socket.Event) -> ())?) {
-            self.event = newValue
         }
         
         func queue(event: FileEvents, _ continuation: SocketContinuation<(), Error>) {
@@ -275,7 +268,7 @@ extension SocketManager.SocketState {
             try fileDescriptor.write($0)
         }
         // notify
-        event?(.write(byteCount))
+        event.yield(.write(byteCount))
         return byteCount
     }
     
@@ -289,7 +282,7 @@ extension SocketManager.SocketState {
             data = data.prefix(bytesRead)
         }
         // notify
-        event?(.read(bytesRead))
+        event.yield(.read(bytesRead))
         return data
     }
 }

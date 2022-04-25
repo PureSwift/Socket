@@ -19,41 +19,23 @@ public struct Socket {
     /// Underlying file descriptor
     public let fileDescriptor: FileDescriptor
     
+    public let event: EventStream
+    
     internal unowned let manager: SocketManager
     
     // MARK: - Initialization
     
     /// Starts monitoring a socket.
     public init(
-        fileDescriptor: FileDescriptor,
-        event: ((Event) -> ())? = nil
+        fileDescriptor: FileDescriptor
     ) async {
         let manager = SocketManager.shared
         self.fileDescriptor = fileDescriptor
         self.manager = manager
-        #if DEBUG
-        let event = event ?? {
-            log("Socket \(fileDescriptor) event: \($0)")
-        }
-        #endif
-        
-        // make sure its non blocking
-        do { try setNonBlock() }
-        catch {
-            log("Unable to set non blocking. \(error)")
-            assertionFailure("Unable to set non blocking. \(error)")
-            return
-        }
-        
-        // start monitoring
-        await manager.add(fileDescriptor: fileDescriptor, event: event)
+        self.event = await manager.add(fileDescriptor)
     }
     
     // MARK: - Methods
-    
-    public func setEvent(_ event: ((Event) -> ())?) async throws {
-        try await manager.setEvent(event, for: fileDescriptor)
-    }
     
     /// Write to socket
     @discardableResult
@@ -69,14 +51,6 @@ public struct Socket {
     public func close() async {
         await manager.remove(fileDescriptor)
     }
-    
-    private func setNonBlock() throws {
-        var status = try fileDescriptor.getStatus()
-        if status.contains(.nonBlocking) == false {
-            status.insert(.nonBlocking)
-            try fileDescriptor.setStatus(status)
-        }
-    }
 }
 
 // MARK: - Supporting Types
@@ -90,6 +64,8 @@ public extension Socket {
         case write(Int)
         case close(Error?)
     }
+    
+    typealias EventStream = AsyncThrowingStream<Event, Error>
 }
 
 public extension Socket {
