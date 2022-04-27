@@ -13,9 +13,9 @@ internal actor SocketManager {
     
     static let shared = SocketManager()
     
-    private var sockets = [FileDescriptor: SocketState]()
+    private var sockets = [SocketDescriptor: SocketState]()
     
-    private var pollDescriptors = [FileDescriptor.Poll]()
+    private var pollDescriptors = [SocketDescriptor.Poll]()
     
     private var isMonitoring = false
         
@@ -45,12 +45,12 @@ internal actor SocketManager {
         }
     }
     
-    func contains(_ fileDescriptor: FileDescriptor) -> Bool {
+    func contains(_ fileDescriptor: SocketDescriptor) -> Bool {
         return sockets.keys.contains(fileDescriptor)
     }
     
     func add(
-        _ fileDescriptor: FileDescriptor
+        _ fileDescriptor: SocketDescriptor
     ) -> Socket.Event.Stream {
         guard sockets.keys.contains(fileDescriptor) == false else {
             fatalError("Another socket for file descriptor \(fileDescriptor) already exists.")
@@ -83,7 +83,7 @@ internal actor SocketManager {
         return event
     }
     
-    func remove(_ fileDescriptor: FileDescriptor, error: Error? = nil) async {
+    func remove(_ fileDescriptor: SocketDescriptor, error: Error? = nil) async {
         guard let socket = sockets[fileDescriptor] else {
             return // could have been removed by `poll()`
         }
@@ -101,7 +101,7 @@ internal actor SocketManager {
     }
     
     @discardableResult
-    internal nonisolated func write(_ data: Data, for fileDescriptor: FileDescriptor) async throws -> Int {
+    internal nonisolated func write(_ data: Data, for fileDescriptor: SocketDescriptor) async throws -> Int {
         guard let socket = await sockets[fileDescriptor] else {
             log("Unable to write unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
@@ -112,7 +112,7 @@ internal actor SocketManager {
         return try await socket.write(data)
     }
     
-    internal nonisolated func read(_ length: Int, for fileDescriptor: FileDescriptor) async throws -> Data {
+    internal nonisolated func read(_ length: Int, for fileDescriptor: SocketDescriptor) async throws -> Data {
         guard let socket = await sockets[fileDescriptor] else {
             log("Unable to read unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
@@ -123,14 +123,14 @@ internal actor SocketManager {
         return try await socket.read(length)
     }
     
-    private func events(for fileDescriptor: FileDescriptor) throws -> FileEvents {
-        guard let poll = pollDescriptors.first(where: { $0.fileDescriptor == fileDescriptor }) else {
+    private func events(for fileDescriptor: SocketDescriptor) throws -> FileEvents {
+        guard let poll = pollDescriptors.first(where: { $0.socket == fileDescriptor }) else {
             throw Errno.connectionAbort
         }
         return poll.returnedEvents
     }
     
-    private nonisolated func wait(for event: FileEvents, fileDescriptor: FileDescriptor) async throws {
+    private nonisolated func wait(for event: FileEvents, fileDescriptor: SocketDescriptor) async throws {
         guard let socket = await sockets[fileDescriptor] else {
             log("Unable to wait for unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
@@ -161,7 +161,7 @@ internal actor SocketManager {
         pollDescriptors = sockets.keys
             .lazy
             .sorted(by: { $0.rawValue < $1.rawValue })
-            .map { FileDescriptor.Poll(fileDescriptor: $0, events: .socket) }
+            .map { SocketDescriptor.Poll(socket: $0, events: .socketManager) }
     }
     
     private func poll() async throws {
@@ -177,29 +177,29 @@ internal actor SocketManager {
         // wait for concurrent handling
         for poll in pollDescriptors {
             if poll.returnedEvents.contains(.write) {
-                await self.canWrite(poll.fileDescriptor)
+                await self.canWrite(poll.socket)
             }
             if poll.returnedEvents.contains(.read) {
-                await self.shouldRead(poll.fileDescriptor)
+                await self.shouldRead(poll.socket)
             }
             if poll.returnedEvents.contains(.invalidRequest) {
-                assertionFailure("Polled for invalid socket \(poll.fileDescriptor)")
-                await self.error(.badFileDescriptor, for: poll.fileDescriptor)
+                assertionFailure("Polled for invalid socket \(poll.socket)")
+                await self.error(.badFileDescriptor, for: poll.socket)
             }
             if poll.returnedEvents.contains(.hangup) {
-                await self.error(.connectionReset, for: poll.fileDescriptor)
+                await self.error(.connectionReset, for: poll.socket)
             }
             if poll.returnedEvents.contains(.error) {
-                await self.error(.connectionAbort, for: poll.fileDescriptor)
+                await self.error(.connectionAbort, for: poll.socket)
             }
         }
     }
     
-    private func error(_ error: Errno, for fileDescriptor: FileDescriptor) async {
+    private func error(_ error: Errno, for fileDescriptor: SocketDescriptor) async {
         await self.remove(fileDescriptor, error: error)
     }
     
-    private func shouldRead(_ fileDescriptor: FileDescriptor) async {
+    private func shouldRead(_ fileDescriptor: SocketDescriptor) async {
         guard let socket = self.sockets[fileDescriptor] else {
             log("Pending read for unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
@@ -211,7 +211,7 @@ internal actor SocketManager {
         socket.event.yield(.pendingRead)
     }
     
-    private func canWrite(_ fileDescriptor: FileDescriptor) async {
+    private func canWrite(_ fileDescriptor: SocketDescriptor) async {
         guard let socket = self.sockets[fileDescriptor] else {
             log("Can write for unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
@@ -228,13 +228,13 @@ extension SocketManager {
     
     actor SocketState {
         
-        let fileDescriptor: FileDescriptor
+        let fileDescriptor: SocketDescriptor
         
         let event: Socket.Event.Stream.Continuation
         
         private var pendingEvent = [FileEvents: [SocketContinuation<(), Error>]]()
         
-        init(fileDescriptor: FileDescriptor,
+        init(fileDescriptor: SocketDescriptor,
              event: Socket.Event.Stream.Continuation
         ) {
             self.fileDescriptor = fileDescriptor
@@ -285,5 +285,18 @@ extension SocketManager.SocketState {
         // notify
         event.yield(.read(bytesRead))
         return data
+    }
+}
+
+private extension FileEvents {
+    
+    static var socketManager: FileEvents {
+        [
+            .read,
+            .write,
+            .error,
+            .hangup,
+            .invalidRequest
+        ]
     }
 }
