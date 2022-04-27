@@ -7,6 +7,30 @@
 
 extension SocketDescriptor {
     
+    /// Runs a closure and then closes the file descriptor, even if an error occurs.
+    ///
+    /// - Parameter body: The closure to run.
+    ///   If the closure throws an error,
+    ///   this method closes the file descriptor before it rethrows that error.
+    ///
+    /// - Returns: The value returned by the closure.
+    ///
+    /// If `body` throws an error
+    /// or an error occurs while closing the file descriptor,
+    /// this method rethrows that error.
+    public func closeAfter<R>(_ body: () throws -> R) throws -> R {
+      // No underscore helper, since the closure's throw isn't necessarily typed.
+      let result: R
+      do {
+        result = try body()
+      } catch {
+        _ = try? self.close() // Squash close error and throw closure's
+        throw error
+      }
+      try self.close()
+      return result
+    }
+    
     /// Runs a closure and then closes the file descriptor if an error occurs.
     ///
     /// - Parameter body: The closure to run.
