@@ -386,3 +386,38 @@ internal func system_fcntl(
 #endif
   return fcntl(fd, cmd, pointer)
 }
+
+// ioctl
+internal func system_ioctl(
+  _ fd: Int32,
+  _ request: CUnsignedLong
+) -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(fd, request) }
+#endif
+  return ioctl(fd, request)
+}
+
+// ioctl
+internal func system_ioctl(
+  _ fd: Int32,
+  _ request: CUnsignedLong,
+  _ value: CInt
+) -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(fd, request, value) }
+#endif
+  return ioctl(fd, request, value)
+}
+
+// ioctl
+internal func system_ioctl(
+  _ fd: Int32,
+  _ request: CUnsignedLong,
+  _ pointer: UnsafeMutableRawPointer
+) -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(fd, request, pointer) }
+#endif
+  return ioctl(fd, request, pointer)
+}
