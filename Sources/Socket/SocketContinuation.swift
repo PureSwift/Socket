@@ -15,12 +15,12 @@ internal struct SocketContinuation<T, E> where E: Error {
     
     private let continuation: CheckedContinuation<T, E>
     
-    private let fileDescriptor: FileDescriptor
+    private let fileDescriptor: SocketDescriptor
     
     fileprivate init(
         continuation: UnsafeContinuation<T, E>,
         function: String,
-        fileDescriptor: FileDescriptor
+        fileDescriptor: SocketDescriptor
     ) {
         self.continuation = CheckedContinuation(continuation: continuation, function: function)
         self.function = function
@@ -50,7 +50,7 @@ extension SocketContinuation where T == Void {
 }
 
 internal func withContinuation<T>(
-    for fileDescriptor: FileDescriptor,
+    for fileDescriptor: SocketDescriptor,
     function: String = #function,
     _ body: (SocketContinuation<T, Never>) -> Void
 ) async -> T {
@@ -60,7 +60,7 @@ internal func withContinuation<T>(
 }
 
 internal func withThrowingContinuation<T>(
-    for fileDescriptor: FileDescriptor,
+    for fileDescriptor: SocketDescriptor,
     function: String = #function,
     _ body: (SocketContinuation<T, Swift.Error>) -> Void
 ) async throws -> T {
@@ -73,7 +73,7 @@ internal typealias SocketContinuation<T, E> = UnsafeContinuation<T, E> where E: 
 
 @inline(__always)
 internal func withContinuation<T>(
-    for fileDescriptor: FileDescriptor,
+    for fileDescriptor: SocketDescriptor,
     function: String = #function,
     _ body: (SocketContinuation<T, Never>) -> Void
 ) async -> T {
@@ -82,7 +82,7 @@ internal func withContinuation<T>(
 
 @inline(__always)
 internal func withThrowingContinuation<T>(
-    for fileDescriptor: FileDescriptor,
+    for fileDescriptor: SocketDescriptor,
     function: String = #function,
     _ body: (SocketContinuation<T, Swift.Error>) -> Void
 ) async throws -> T {

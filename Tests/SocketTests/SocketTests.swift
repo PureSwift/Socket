@@ -8,12 +8,14 @@ final class SocketTests: XCTestCase {
     func _testUnixSocket() async throws {
         let address = UnixSocketAddress(path: "/tmp/socket1")
         let socketA = try await Socket(
-            fileDescriptor: .socket(UnixProtocol.raw, bind: address)
+            UnixProtocol.raw,
+            bind: address
         )
         defer { Task { await socketA.close() } }
         
         let socketB = try await Socket(
-            fileDescriptor: .socket(UnixProtocol.raw, bind: address)
+            UnixProtocol.raw,
+            bind: address
         )
         defer { Task { await socketB.close() } }
         
@@ -24,12 +26,13 @@ final class SocketTests: XCTestCase {
         XCTAssertEqual(data, read)
     }
     
-    func testIPv4Socket() async throws {
+    func _testIPv4Socket() async throws {
         let address = IPv4SocketAddress(address: .any, port: 8888)
         let data = Data("Test \(UUID())".utf8)
         
         let server = try await Socket(
-            fileDescriptor: .socket(IPv4Protocol.tcp, bind: address)
+            IPv4Protocol.tcp,
+            bind: address
         )
         defer { Task { await server.close() } }
         NSLog("Server: Created server socket \(server.fileDescriptor)")
@@ -52,7 +55,7 @@ final class SocketTests: XCTestCase {
         }
         
         let client = try await Socket(
-            fileDescriptor: .socket(IPv4Protocol.tcp)
+            IPv4Protocol.tcp
         )
         defer { Task { await client.close() } }
         NSLog("Client: Created client socket \(client.fileDescriptor)")

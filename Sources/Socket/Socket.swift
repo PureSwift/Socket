@@ -6,7 +6,7 @@
 //
 
 import Foundation
-import SystemPackage
+@_exported import SystemPackage
 
 /// Socket
 public struct Socket {
@@ -16,8 +16,8 @@ public struct Socket {
     /// Configuration for fine-tuning socket performance.
     public static var configuration = Socket.Configuration()
     
-    /// Underlying file descriptor
-    public let fileDescriptor: FileDescriptor
+    /// Underlying native socket handle.
+    public let fileDescriptor: SocketDescriptor
     
     public let event: Socket.Event.Stream
     
@@ -27,13 +27,51 @@ public struct Socket {
     
     /// Starts monitoring a socket.
     public init(
-        fileDescriptor: FileDescriptor
+        fileDescriptor: SocketDescriptor
     ) async {
         let manager = SocketManager.shared
         self.fileDescriptor = fileDescriptor
         self.manager = manager
         self.event = await manager.add(fileDescriptor)
     }
+    
+    /// Initialize
+    public init<T: SocketProtocol>(
+        _ protocolID: T
+    ) async throws {
+        let fileDescriptor = try SocketDescriptor(protocolID)
+        await self.init(fileDescriptor: fileDescriptor)
+    }
+    
+    ///
+    public init<Address: SocketAddress>(
+        _ protocolID: Address.ProtocolID,
+        bind address: Address
+    ) async throws {
+        let fileDescriptor = try SocketDescriptor(protocolID, bind: address)
+        await self.init(fileDescriptor: fileDescriptor)
+    }
+    
+    #if os(Linux)
+    ///
+    public init<T: SocketProtocol>(
+        _ protocolID: T,
+        flags: SocketFlags
+    ) throws {
+        let fileDescriptor = try SocketDescriptor(protocolID, flags: flags)
+        await self.init(fileDescriptor: fileDescriptor)
+    }
+    
+    ///
+    public init<Address: SocketAddress>(
+        _ protocolID: Address.ProtocolID,
+        bind address: Address,
+        flags: SocketFlags
+    ) async throws {
+        let fileDescriptor = try SocketDescriptor(protocolID, bind: address, flags: flags)
+        await self.init(fileDescriptor: fileDescriptor)
+    }
+    #endif
     
     // MARK: - Methods
     

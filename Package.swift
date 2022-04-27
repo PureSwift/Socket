@@ -18,7 +18,10 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/PureSwift/swift-system.git", .branch("master")),
+        .package(
+            url: "https://github.com/apple/swift-system",
+            from: "1.0.0"
+        ),
     ],
     targets: [
         .target(
