@@ -57,7 +57,7 @@ public struct Socket {
     public init<T: SocketProtocol>(
         _ protocolID: T,
         flags: SocketFlags
-    ) throws {
+    ) async throws {
         let fileDescriptor = try SocketDescriptor(protocolID, flags: flags)
         await self.init(fileDescriptor: fileDescriptor)
     }
