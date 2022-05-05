@@ -3,7 +3,6 @@ import SystemPackage
 #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
 import Darwin
 #elseif os(Linux) || os(FreeBSD) || os(Android)
-import CSocket
 import Glibc
 #elseif os(Windows)
 import CSocket
@@ -306,32 +305,6 @@ internal var _AF_IRDA: CInt { AF_IRDA }
 
 @_alwaysEmitIntoClient
 internal var _AF_BTH: CInt { AF_BTH }
-#endif
-
-@_alwaysEmitIntoClient
-internal var _SOCK_STREAM: CInterop.SocketType { SOCK_STREAM }
-
-@_alwaysEmitIntoClient
-internal var _SOCK_DGRAM: CInterop.SocketType { SOCK_DGRAM }
-
-@_alwaysEmitIntoClient
-internal var _SOCK_RAW: CInterop.SocketType { SOCK_RAW }
-
-@_alwaysEmitIntoClient
-internal var _SOCK_RDM: CInterop.SocketType { SOCK_RDM }
-
-@_alwaysEmitIntoClient
-internal var _SOCK_SEQPACKET: CInterop.SocketType { SOCK_SEQPACKET }
-
-#if os(Linux)
-@_alwaysEmitIntoClient
-internal var _SOCK_DCCP: CInterop.SocketType { SOCK_DCCP }
-
-@_alwaysEmitIntoClient
-internal var _SOCK_CLOEXEC: CInterop.SocketType { SOCK_CLOEXEC }
-
-@_alwaysEmitIntoClient
-internal var _SOCK_NONBLOCK: CInterop.SocketType { SOCK_NONBLOCK }
 #endif
 
 @_alwaysEmitIntoClient
