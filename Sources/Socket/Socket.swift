@@ -86,8 +86,21 @@ public struct Socket {
         try await manager.read(length, for: fileDescriptor)
     }
     
+    /// Close socket.
     public func close() async {
         await manager.remove(fileDescriptor)
+    }
+    
+    /// Get socket option.
+    public subscript <T: SocketOption> (_ option: T.Type) -> T {
+        get throws {
+            return try fileDescriptor.getSocketOption(option)
+        }
+    }
+    
+    /// Set socket option.
+    public func setOption <T: SocketOption> (_ option: T) throws {
+        try fileDescriptor.setSocketOption(option)
     }
 }
 
