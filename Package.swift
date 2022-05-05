@@ -30,8 +30,12 @@ let package = Package(
         .target(
             name: "Socket",
             dependencies: [
+                "CSocket",
                 .product(name: "SystemPackage", package: "swift-system"),
             ]
+        ),
+        .target(
+            name: "CSocket"
         ),
         .testTarget(
             name: "SocketTests",

@@ -3,9 +3,10 @@ import SystemPackage
 #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
 import Darwin
 #elseif os(Linux) || os(FreeBSD) || os(Android)
+import CSocket
 import Glibc
 #elseif os(Windows)
-import CSystem
+import CSocket
 import ucrt
 #else
 #error("Unsupported Platform")

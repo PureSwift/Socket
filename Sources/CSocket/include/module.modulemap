@@ -1,0 +1,5 @@
+module CSocket {
+  header "CSystemLinux.h"
+  header "CSystemWindows.h"
+  export *
+}

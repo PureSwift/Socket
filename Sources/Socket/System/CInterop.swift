@@ -5,7 +5,7 @@ import Darwin
 #elseif os(Linux) || os(FreeBSD) || os(Android)
 import Glibc
 #elseif os(Windows)
-import CSystem
+import CSocket
 import ucrt
 #else
 #error("Unsupported Platform")
