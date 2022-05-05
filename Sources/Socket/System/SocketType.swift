@@ -1,3 +1,6 @@
+#if canImport(Darwin)
+import Darwin
+#endif
 import SystemPackage
 @_implementationOnly import CSocket
 
