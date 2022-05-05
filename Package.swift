@@ -3,6 +3,8 @@
 
 import PackageDescription
 
+let libraryType: PackageDescription.Product.Library.LibraryType = .static
+
 let package = Package(
     name: "Socket",
     platforms: [
@@ -14,6 +16,7 @@ let package = Package(
     products: [
         .library(
             name: "Socket",
+            type: libraryType,
             targets: ["Socket"]
         ),
     ],
