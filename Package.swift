@@ -23,8 +23,8 @@ var package = Package(
     ],
     dependencies: [
         .package(
-            url: "https://github.com/apple/swift-system",
-            from: "1.0.0"
+            url: "https://github.com/PureSwift/swift-system",
+            .branch("feature/dynamic-lib")
         ),
     ],
     targets: [
