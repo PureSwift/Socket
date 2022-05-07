@@ -28,6 +28,17 @@ public extension MessageFlags {
     
     @_alwaysEmitIntoClient
     static var endOfReadline: MessageFlags { MessageFlags(_MSG_EOR) }
+    
+    #if os(Linux)
+    /// The caller has more data to send.
+    @_alwaysEmitIntoClient
+    static var more: MessageFlags { MessageFlags(_MSG_MORE) }
+    
+    /// Tell the link layer that forward progress happened: you
+    /// got a successful reply from the other side.
+    @_alwaysEmitIntoClient
+    static var confirm: MessageFlags { MessageFlags(_MSG_CONFIRM) }
+    #endif
 }
 
 extension MessageFlags
@@ -36,14 +47,24 @@ extension MessageFlags
   /// A textual representation of the file permissions.
   @inline(never)
   public var description: String {
-    let descriptions: [(Element, StaticString)] = [
-      (.outOfBand, ".outOfBand"),
-      (.peek, ".peek"),
-      (.noRoute, ".noRoute"),
-      (.endOfReadline, ".endOfReadline")
-    ]
-
-    return _buildDescription(descriptions)
+      #if os(Linux)
+      let descriptions: [(Element, StaticString)] = [
+        (.outOfBand, ".outOfBand"),
+        (.peek, ".peek"),
+        (.noRoute, ".noRoute"),
+        (.endOfReadline, ".endOfReadline"),
+        (.more, ".more"),
+        (.confirm, ".confirm")
+      ]
+      #else
+      let descriptions: [(Element, StaticString)] = [
+        (.outOfBand, ".outOfBand"),
+        (.peek, ".peek"),
+        (.noRoute, ".noRoute"),
+        (.endOfReadline, ".endOfReadline")
+      ]
+      #endif
+      return _buildDescription(descriptions)
   }
 
   /// A textual representation of the file permissions, suitable for debugging.
