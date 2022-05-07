@@ -265,7 +265,7 @@ extension SocketDescriptor {
       retryOnInterrupt: Bool
     ) -> Result<Int, Errno> {
       valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-        system_send(self.rawValue, buffer.baseAddress!, buffer.count, flags.rawValue)
+        system_send(self.rawValue, buffer.baseAddress, buffer.count, flags.rawValue)
       }
     }
     
