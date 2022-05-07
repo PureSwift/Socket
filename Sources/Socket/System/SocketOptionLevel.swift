@@ -29,5 +29,8 @@ public extension SocketOptionLevel {
     
     @_alwaysEmitIntoClient
     static var bluetooth: SocketOptionLevel { SocketOptionLevel(_SOL_BLUETOOTH) }
+    
+    @_alwaysEmitIntoClient
+    static var crypto: SocketOptionLevel { SocketOptionLevel(_SOL_ALG) }
 }
 #endif
