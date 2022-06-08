@@ -16,6 +16,7 @@ public struct UnixSocketAddress: SocketAddress, Equatable, Hashable {
     
     @_alwaysEmitIntoClient
     public init(path: FilePath) {
+        assert(path.length < 108)
         self.path = path
     }
     
@@ -29,7 +30,7 @@ public struct UnixSocketAddress: SocketAddress, Equatable, Hashable {
                 pathBytes
                     .bindMemory(to: CInterop.PlatformChar.self)
                     .baseAddress!
-                    .assign(from: platformString, count: path.length)
+                    .assign(from: platformString, count: path.length + 1)
             }
             return try socketAddress.withUnsafePointer(body)
         }
