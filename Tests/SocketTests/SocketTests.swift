@@ -27,7 +27,9 @@ final class SocketTests: XCTestCase {
     }
     
     func testIPv4Socket() async throws {
-        let address = IPv4SocketAddress(address: .any, port: 8888)
+        let port = UInt16.random(in: 8080 ..< .max)
+        print("Using port \(port)")
+        let address = IPv4SocketAddress(address: .any, port: .random(in: 8080 ..< .max))
         let data = Data("Test \(UUID())".utf8)
         
         let server = try await Socket(
@@ -44,7 +46,6 @@ final class SocketTests: XCTestCase {
                 let newConnection = await Socket(
                     fileDescriptor: try await server.fileDescriptor.accept()
                 )
-                //defer { Task { await newConnection.close() } }
                 NSLog("Server: Got incoming connection \(newConnection.fileDescriptor)")
                 let _ = try await newConnection.write(data)
                 NSLog("Server: Wrote outgoing data")
