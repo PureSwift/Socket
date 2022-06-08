@@ -5,30 +5,41 @@ import SystemPackage
 
 final class SocketTests: XCTestCase {
     
+    #if os(Linux)
     func _testUnixSocket() async throws {
-        let address = UnixSocketAddress(path: "/tmp/socket1")
+        let address = UnixSocketAddress(path: FilePath("/tmp/testsocket.sock"))
+        NSLog("Using path \(address.path.description)")
         let socketA = try await Socket(
-            UnixProtocol.raw,
-            bind: address
+            UnixProtocol.raw
         )
+        NSLog("Created socket A")
+        let option: GenericSocketOption.ReuseAddress = true
+        try socketA.fileDescriptor.setSocketOption(option)
+        do { try socketA.fileDescriptor.bind(address) }
+        catch { }
         defer { Task { await socketA.close() } }
         
         let socketB = try await Socket(
-            UnixProtocol.raw,
-            bind: address
+            UnixProtocol.raw
         )
+        NSLog("Created socket B")
+        try socketB.fileDescriptor.setSocketOption(option)
+        try socketB.fileDescriptor.bind(address)
         defer { Task { await socketB.close() } }
         
         let data = Data("Test \(UUID())".utf8)
         
         try await socketA.write(data)
+        NSLog("Socket A wrote data")
         let read = try await socketB.read(data.count)
+        NSLog("Socket B read data")
         XCTAssertEqual(data, read)
     }
+    #endif
     
     func testIPv4Socket() async throws {
         let port = UInt16.random(in: 8080 ..< .max)
-        print("Using port \(port)")
+        NSLog("Using port \(port)")
         let address = IPv4SocketAddress(address: .any, port: .random(in: 8080 ..< .max))
         let data = Data("Test \(UUID())".utf8)
         
