@@ -26,7 +26,7 @@ final class SocketTests: XCTestCase {
         XCTAssertEqual(data, read)
     }
     
-    func _testIPv4Socket() async throws {
+    func testIPv4Socket() async throws {
         let address = IPv4SocketAddress(address: .any, port: 8888)
         let data = Data("Test \(UUID())".utf8)
         
@@ -61,7 +61,8 @@ final class SocketTests: XCTestCase {
         NSLog("Client: Created client socket \(client.fileDescriptor)")
         
         NSLog("Client: Will connect to server")
-        try await client.fileDescriptor.connect(to: address, sleep: 100_000_000)
+        do { try await client.fileDescriptor.connect(to: address, sleep: 100_000_000) }
+        catch Errno.socketIsConnected { }
         NSLog("Client: Connected to server")
         let read = try await client.read(data.count)
         NSLog("Client: Read incoming data")
