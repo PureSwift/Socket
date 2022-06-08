@@ -40,7 +40,7 @@ public extension GenericSocketOption {
     static var keepAlive: GenericSocketOption { GenericSocketOption(_SO_KEEPALIVE) }
     
     /**
-     Allow reuse of local addresses when binding,
+     Allow reuse of local addresses when binding.
      
      Indicates that the rules used in validating addresses
      supplied in a  ``SocketDescriptor.bind(_:retryOnInterrupt:)`` call should allow reuse of local

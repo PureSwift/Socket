@@ -46,6 +46,7 @@ public extension BooleanSocketOption {
 /// Platform Socket Option
 public extension GenericSocketOption {
     
+    /// Enable socket debugging.
     @frozen
     struct Debug: BooleanSocketOption, Equatable, Hashable, ExpressibleByBooleanLiteral {
         
@@ -60,11 +61,27 @@ public extension GenericSocketOption {
         }
     }
     
+    /// Enable sending of keep-alive messages on connection-oriented sockets.
     @frozen
     struct KeepAlive: BooleanSocketOption, Equatable, Hashable, ExpressibleByBooleanLiteral {
         
         @_alwaysEmitIntoClient
         public static var id: GenericSocketOption { .keepAlive }
+        
+        public var boolValue: Bool
+        
+        @_alwaysEmitIntoClient
+        public init(_ boolValue: Bool) {
+            self.boolValue = boolValue
+        }
+    }
+    
+    // Allow reuse of local addresses when binding.
+    @frozen
+    struct ReuseAddress: BooleanSocketOption, Equatable, Hashable, ExpressibleByBooleanLiteral {
+        
+        @_alwaysEmitIntoClient
+        public static var id: GenericSocketOption { .reuseAddress }
         
         public var boolValue: Bool
         
