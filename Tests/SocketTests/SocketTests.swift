@@ -39,8 +39,8 @@ final class SocketTests: XCTestCase {
     
     func testIPv4Socket() async throws {
         let port = UInt16.random(in: 8080 ..< .max)
-        NSLog("Using port \(port)")
-        let address = IPv4SocketAddress(address: .any, port: .random(in: 8080 ..< .max))
+        print("Using port \(port)")
+        let address = IPv4SocketAddress(address: .any, port: port)
         let data = Data("Test \(UUID())".utf8)
         
         let server = try await Socket(
@@ -79,5 +79,13 @@ final class SocketTests: XCTestCase {
         let read = try await client.read(data.count)
         NSLog("Client: Read incoming data")
         XCTAssertEqual(data, read)
+    }
+    
+    func testNetworkInterface() throws {
+        let interfaces = try NetworkInterface.interfaces
+        XCTAssert(interfaces.isEmpty == false)
+        for interface in interfaces {
+            print("\(interface.id). \(interface.name)")
+        }
     }
 }

@@ -64,4 +64,7 @@ public extension CInterop {
     
     /// The C `sockaddr_in6` type
     typealias IPv6SocketAddress = sockaddr_in6
+    
+    /// The C `if_nameindex` type
+    typealias InterfaceNameIndex = if_nameindex
 }

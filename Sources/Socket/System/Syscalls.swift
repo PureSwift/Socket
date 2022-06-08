@@ -421,3 +421,19 @@ internal func system_ioctl(
 #endif
   return ioctl(fd, request, pointer)
 }
+
+// if_nameindex
+internal func system_if_nameindex() -> UnsafeMutablePointer<CInterop.InterfaceNameIndex>? {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock() }
+#endif
+    return if_nameindex()
+}
+
+// if_nameindex
+internal func system_if_freenameindex(_ pointer: UnsafeMutablePointer<CInterop.InterfaceNameIndex>?) {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(pointer) }
+#endif
+    return if_freenameindex(pointer)
+}
