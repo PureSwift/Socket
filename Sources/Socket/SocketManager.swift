@@ -112,6 +112,18 @@ internal actor SocketManager {
         return try await socket.write(data)
     }
     
+    @discardableResult
+    internal nonisolated func sendMessage(_ data: Data, for fileDescriptor: SocketDescriptor) async throws -> Int {
+        guard let socket = await sockets[fileDescriptor] else {
+            log("Unable to write unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
+            throw Errno.invalidArgument
+        }
+        // attempt to execute immediately
+        try await wait(for: .write, fileDescriptor: fileDescriptor)
+        return try await socket.write(data)
+    }
+    
     internal nonisolated func read(_ length: Int, for fileDescriptor: SocketDescriptor) async throws -> Data {
         guard let socket = await sockets[fileDescriptor] else {
             log("Unable to read unknown socket \(fileDescriptor).")
@@ -121,6 +133,17 @@ internal actor SocketManager {
         // attempt to execute immediately
         try await wait(for: .read, fileDescriptor: fileDescriptor)
         return try await socket.read(length)
+    }
+    
+    internal nonisolated func receiveMessage(_ length: Int, for fileDescriptor: SocketDescriptor) async throws -> Data {
+        guard let socket = await sockets[fileDescriptor] else {
+            log("Unable to read unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
+            throw Errno.invalidArgument
+        }
+        // attempt to execute immediately
+        try await wait(for: .read, fileDescriptor: fileDescriptor)
+        return try await socket.receiveMessage(length)
     }
     
     private func events(for fileDescriptor: SocketDescriptor) throws -> FileEvents {
@@ -273,11 +296,35 @@ extension SocketManager.SocketState {
         return byteCount
     }
     
+    func sendMessage(_ data: Data) throws -> Int {
+        log("Will write \(data.count) bytes to \(fileDescriptor)")
+        let byteCount = try data.withUnsafeBytes {
+            try fileDescriptor.send($0)
+        }
+        // notify
+        event.yield(.write(byteCount))
+        return byteCount
+    }
+    
     func read(_ length: Int) throws -> Data {
-        log("Will read \(length) bytes to \(fileDescriptor)")
+        log("Will read \(length) bytes from \(fileDescriptor)")
         var data = Data(count: length)
         let bytesRead = try data.withUnsafeMutableBytes {
             try fileDescriptor.read(into: $0)
+        }
+        if bytesRead < length {
+            data = data.prefix(bytesRead)
+        }
+        // notify
+        event.yield(.read(bytesRead))
+        return data
+    }
+    
+    func receiveMessage(_ length: Int) throws -> Data {
+        log("Will receive message with \(length) bytes from \(fileDescriptor)")
+        var data = Data(count: length)
+        let bytesRead = try data.withUnsafeMutableBytes {
+            try fileDescriptor.receive(into: $0)
         }
         if bytesRead < length {
             data = data.prefix(bytesRead)

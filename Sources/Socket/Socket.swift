@@ -81,9 +81,20 @@ public struct Socket {
         try await manager.write(data, for: fileDescriptor)
     }
     
+    /// Send messate to socket
+    @discardableResult
+    public func sendMessage(_ data: Data) async throws -> Int {
+        try await manager.write(data, for: fileDescriptor)
+    }
+    
     /// Read from socket
     public func read(_ length: Int) async throws -> Data {
         try await manager.read(length, for: fileDescriptor)
+    }
+    
+    /// Receive message from socket
+    public func receiveMessage(_ length: Int) async throws -> Data {
+        try await manager.receiveMessage(length, for: fileDescriptor)
     }
     
     /// Close socket.
