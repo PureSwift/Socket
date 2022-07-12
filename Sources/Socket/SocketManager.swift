@@ -121,7 +121,7 @@ internal actor SocketManager {
         }
         // attempt to execute immediately
         try await wait(for: .write, fileDescriptor: fileDescriptor)
-        return try await socket.write(data)
+        return try await socket.sendMessage(data)
     }
     
     internal nonisolated func read(_ length: Int, for fileDescriptor: SocketDescriptor) async throws -> Data {
