@@ -115,7 +115,7 @@ internal actor SocketManager {
     @discardableResult
     internal nonisolated func sendMessage(_ data: Data, for fileDescriptor: SocketDescriptor) async throws -> Int {
         guard let socket = await sockets[fileDescriptor] else {
-            log("Unable to write unknown socket \(fileDescriptor).")
+            log("Unable to send message to unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
@@ -137,7 +137,7 @@ internal actor SocketManager {
     
     internal nonisolated func receiveMessage(_ length: Int, for fileDescriptor: SocketDescriptor) async throws -> Data {
         guard let socket = await sockets[fileDescriptor] else {
-            log("Unable to read unknown socket \(fileDescriptor).")
+            log("Unable to receive message from unknown socket \(fileDescriptor).")
             assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
             throw Errno.invalidArgument
         }
@@ -297,7 +297,7 @@ extension SocketManager.SocketState {
     }
     
     func sendMessage(_ data: Data) throws -> Int {
-        log("Will write \(data.count) bytes to \(fileDescriptor)")
+        log("Will send message with \(data.count) bytes to \(fileDescriptor)")
         let byteCount = try data.withUnsafeBytes {
             try fileDescriptor.send($0)
         }

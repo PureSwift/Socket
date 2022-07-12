@@ -81,7 +81,7 @@ public struct Socket {
         try await manager.write(data, for: fileDescriptor)
     }
     
-    /// Send messate to socket
+    /// Send message to socket
     @discardableResult
     public func sendMessage(_ data: Data) async throws -> Int {
         try await manager.write(data, for: fileDescriptor)
