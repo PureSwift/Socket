@@ -124,6 +124,18 @@ internal actor SocketManager {
         return try await socket.sendMessage(data)
     }
     
+    @discardableResult
+    internal nonisolated func sendMessage<Address: SocketAddress>(_ data: Data, to address: Address,  for fileDescriptor: SocketDescriptor) async throws -> Int {
+        guard let socket = await sockets[fileDescriptor] else {
+            log("Unable to send message to unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
+            throw Errno.invalidArgument
+        }
+        // attempt to execute immediately
+        try await wait(for: .write, fileDescriptor: fileDescriptor)
+        return try await socket.sendMessage(data, to: address)
+    }
+    
     internal nonisolated func read(_ length: Int, for fileDescriptor: SocketDescriptor) async throws -> Data {
         guard let socket = await sockets[fileDescriptor] else {
             log("Unable to read unknown socket \(fileDescriptor).")
@@ -144,6 +156,17 @@ internal actor SocketManager {
         // attempt to execute immediately
         try await wait(for: .read, fileDescriptor: fileDescriptor)
         return try await socket.receiveMessage(length)
+    }
+    
+    internal nonisolated func receiveMessage<Address: SocketAddress>(_ length: Int, fromAddressOf addressType: Address.Type = Address.self, for fileDescriptor: SocketDescriptor) async throws -> (Data, Address) {
+        guard let socket = await sockets[fileDescriptor] else {
+            log("Unable to receive message from unknown socket \(fileDescriptor).")
+            assertionFailure("\(#function) Unknown socket \(fileDescriptor)")
+            throw Errno.invalidArgument
+        }
+        // attempt to execute immediately
+        try await wait(for: .read, fileDescriptor: fileDescriptor)
+        return try await socket.receiveMessage(length, fromAddressOf: addressType)
     }
     
     private func events(for fileDescriptor: SocketDescriptor) throws -> FileEvents {
@@ -306,6 +329,16 @@ extension SocketManager.SocketState {
         return byteCount
     }
     
+    func sendMessage<Address: SocketAddress>(_ data: Data, to address: Address) throws -> Int {
+        log("Will send message with \(data.count) bytes to \(fileDescriptor)")
+        let byteCount = try data.withUnsafeBytes {
+            try fileDescriptor.send($0, to: address)
+        }
+        // notify
+        event.yield(.write(byteCount))
+        return byteCount
+    }
+    
     func read(_ length: Int) throws -> Data {
         log("Will read \(length) bytes from \(fileDescriptor)")
         var data = Data(count: length)
@@ -332,6 +365,20 @@ extension SocketManager.SocketState {
         // notify
         event.yield(.read(bytesRead))
         return data
+    }
+    
+    func receiveMessage<Address: SocketAddress>(_ length: Int, fromAddressOf addressType: Address.Type = Address.self) throws -> (Data, Address) {
+        log("Will receive message with \(length) bytes from \(fileDescriptor)")
+        var data = Data(count: length)
+        let (bytesRead, address) = try data.withUnsafeMutableBytes {
+            try fileDescriptor.receive(into: $0, fromAddressOf: addressType)
+        }
+        if bytesRead < length {
+            data = data.prefix(bytesRead)
+        }
+        // notify
+        event.yield(.read(bytesRead))
+        return (data, address)
     }
 }
 

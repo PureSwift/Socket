@@ -82,34 +82,28 @@ final class SocketTests: XCTestCase {
     }
     
     func testIPv4UDPSocket() async throws {
-        let sourcePort = UInt16.random(in: 8080 ..< .max)
-        let sourceAddress = IPv4SocketAddress(address: .any, port: sourcePort)
-        
-        let destinationPort = UInt16.random(in: 8080 ..< .max)
-        let destinationAddress = IPv4SocketAddress(address: .any, port: destinationPort)
-        
+        let port = UInt16.random(in: 8080 ..< .max)
+        print("Using port \(port)")
+        let address = IPv4SocketAddress(address: .any, port: port)
         let data = Data("Test \(UUID())".utf8)
         
         Task {
             let server = try await Socket(
                 IPv4Protocol.udp,
-                bind: destinationAddress
+                bind: address
             )
-            
-            NSLog("Server: Created server socket \(server.fileDescriptor)")
             defer { Task { await server.close() } }
-            
-            NSLog("Server: Will connect to client")
-            do { try await server.fileDescriptor.connect(to: sourceAddress, sleep: 100_000_000) }
-            catch Errno.socketIsConnected { }
+            NSLog("Server: Created server socket \(server.fileDescriptor)")
             
             do {
-                let _ = try await server.sendMessage(data)
-                NSLog("Server: Wrote outgoing data")
-                
-                let read = try await server.receiveMessage(data.count)
-                NSLog("Server: Read incoming data")
+                NSLog("Server: Waiting to receive incoming message")
+                let (read, clientAddress) = try await server.receiveMessage(data.count, fromAddressOf: type(of: address))
+                NSLog("Server: Received incoming message")
                 XCTAssertEqual(data, read)
+                
+                NSLog("Server: Waiting to send outgoing message")
+                try await server.sendMessage(data, to: clientAddress)
+                NSLog("Server: Sent outgoing message")
             } catch {
                 print("Server:", error)
                 XCTFail("\(error)")
@@ -117,23 +111,19 @@ final class SocketTests: XCTestCase {
         }
         
         let client = try await Socket(
-            IPv4Protocol.udp,
-            bind: sourceAddress
+            IPv4Protocol.udp
         )
-        
-        NSLog("Client: Created client socket \(client.fileDescriptor)")
         defer { Task { await client.close() } }
+        NSLog("Client: Created client socket \(client.fileDescriptor)")
         
-        NSLog("Client: Will connect to server")
-        do { try await client.fileDescriptor.connect(to: destinationAddress, sleep: 100_000_000) }
-        catch Errno.socketIsConnected { }
+        NSLog("Client: Waiting to send outgoing message")
+        try await client.sendMessage(data, to: address)
+        NSLog("Client: Sent outgoing message")
         
-        let read = try await client.receiveMessage(data.count)
-        NSLog("Client: Read incoming data")
+        NSLog("Client: Waiting to receive incoming message")
+        let (read, _) = try await client.receiveMessage(data.count, fromAddressOf: type(of: address))
+        NSLog("Client: Receievd incoming message")
         XCTAssertEqual(data, read)
-        
-        let _ = try await client.sendMessage(data)
-        NSLog("Client: Wrote outgoing data")
     }
     
     func testNetworkInterface() throws {
