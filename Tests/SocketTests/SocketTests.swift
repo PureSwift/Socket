@@ -122,7 +122,7 @@ final class SocketTests: XCTestCase {
         
         NSLog("Client: Waiting to receive incoming message")
         let (read, _) = try await client.receiveMessage(data.count, fromAddressOf: type(of: address))
-        NSLog("Client: Receievd incoming message")
+        NSLog("Client: Received incoming message")
         XCTAssertEqual(data, read)
     }
     
