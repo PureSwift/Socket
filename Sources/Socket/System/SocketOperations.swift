@@ -274,14 +274,14 @@ extension SocketDescriptor {
     /// - Parameters:
     ///   - buffer: The region of memory that contains the data being sent.
     ///   - address: Address of destination client.
-    ///   - flags: see `send(2)`
+    ///   - flags: see `sendto(2)`
     ///   - retryOnInterrupt: Whether to retry the send operation
     ///     if it throws ``Errno/interrupted``.
     ///     The default is `true`.
     ///     Pass `false` to try only once and throw an error upon interruption.
     /// - Returns: The number of bytes that were sent.
     ///
-    /// The corresponding C function is `send`.
+    /// The corresponding C function is `sendto`.
     @_alwaysEmitIntoClient
     public func send<Address: SocketAddress>(
         _ buffer: UnsafeRawBufferPointer,
@@ -289,7 +289,7 @@ extension SocketDescriptor {
         flags: MessageFlags = [],
         retryOnInterrupt: Bool = true
     ) throws -> Int {
-        try _send(buffer, to: address, flags: flags, retryOnInterrupt: retryOnInterrupt).get()
+        try _sendto(buffer, to: address, flags: flags, retryOnInterrupt: retryOnInterrupt).get()
     }
     
     /// Send a message from a socket.
@@ -297,14 +297,14 @@ extension SocketDescriptor {
     /// - Parameters:
     ///   - data: The sequence of bytes being sent.
     ///   - address: Address of destination client.
-    ///   - flags: see `send(2)`
+    ///   - flags: see `sendto(2)`
     ///   - retryOnInterrupt: Whether to retry the send operation
     ///     if it throws ``Errno/interrupted``.
     ///     The default is `true`.
     ///     Pass `false` to try only once and throw an error upon interruption.
     /// - Returns: The number of bytes that were sent.
     ///
-    /// The corresponding C function is `send`.
+    /// The corresponding C function is `sendto`.
     public func send<Address, Data>(
         _ data: Data,
         to address: Address,
@@ -312,15 +312,15 @@ extension SocketDescriptor {
         retryOnInterrupt: Bool = true
     ) throws -> Int where Address: SocketAddress, Data: Sequence, Data.Element == UInt8 {
         try data._withRawBufferPointer { dataPointer in
-            _send(dataPointer, to: address, flags: flags, retryOnInterrupt: retryOnInterrupt)
+            _sendto(dataPointer, to: address, flags: flags, retryOnInterrupt: retryOnInterrupt)
         }.get()
     }
     
-    /// `send()`
+    /// `sendto()`
     @usableFromInline
-    internal func _send<T: SocketAddress>(
+    internal func _sendto<Address: SocketAddress>(
         _ data: UnsafeRawBufferPointer,
-        to address: T,
+        to address: Address,
         flags: MessageFlags,
         retryOnInterrupt: Bool
     ) -> Result<Int, Errno> {
@@ -365,15 +365,46 @@ extension SocketDescriptor {
       }
     }
     
+    /// Receive a message from a socket.
+    ///
+    /// - Parameters:
+    ///   - buffer: The region of memory to receive into.
+    ///   - address: The address the message was sent from
+    ///   - flags: see `recvfrom(2)`
+    ///   - retryOnInterrupt: Whether to retry the receive operation
+    ///     if it throws ``Errno/interrupted``.
+    ///     The default is `true`.
+    ///     Pass `false` to try only once and throw an error upon interruption.
+    /// - Returns: The number of bytes that were received.
+    ///
+    /// The corresponding C function is `recvfrom`.
+    @_alwaysEmitIntoClient
+    public func receive<Address: SocketAddress>(
+      into buffer: UnsafeMutableRawBufferPointer,
+      fromAddressOf addressType: Address.Type = Address.self,
+      flags: MessageFlags = [],
+      retryOnInterrupt: Bool = true
+    ) throws -> (Int, Address) {
+      try _receivefrom(
+        into: buffer, fromAddressOf: addressType, flags: flags, retryOnInterrupt: retryOnInterrupt
+      ).get()
+    }
+    
     @usableFromInline
-    internal func _recieve(
-        _ dataBuffer: UnsafeMutableRawBufferPointer,
-        flags: MessageFlags,
-        retryOnInterrupt: Bool
-    ) -> Result<Int, Errno> {
-        valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-            system_recv(self.rawValue, dataBuffer.baseAddress, dataBuffer.count, flags.rawValue)
+    internal func _receivefrom<Address: SocketAddress>(
+      into buffer: UnsafeMutableRawBufferPointer,
+      fromAddressOf addressType: Address.Type = Address.self,
+      flags: MessageFlags,
+      retryOnInterrupt: Bool
+    ) -> Result<(Int, Address), Errno> {
+      var result: Result<Int, Errno> = .success(0)
+      let address = Address.withUnsafePointer { addressPointer, addressLength in
+        var length = addressLength
+        result = valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
+          system_recvfrom(self.rawValue, buffer.baseAddress, buffer.count, flags.rawValue, addressPointer, &length)
         }
+      }
+      return result.map { ($0, address) }
     }
     
     /// Listen for connections on a socket.

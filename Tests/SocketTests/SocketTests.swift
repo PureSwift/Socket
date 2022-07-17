@@ -37,21 +37,21 @@ final class SocketTests: XCTestCase {
     }
     #endif
     
-    func testIPv4Socket() async throws {
+    func testIPv4TCPSocket() async throws {
         let port = UInt16.random(in: 8080 ..< .max)
         print("Using port \(port)")
         let address = IPv4SocketAddress(address: .any, port: port)
         let data = Data("Test \(UUID())".utf8)
         
-        let server = try await Socket(
-            IPv4Protocol.tcp,
-            bind: address
-        )
-        defer { Task { await server.close() } }
-        NSLog("Server: Created server socket \(server.fileDescriptor)")
-        try server.fileDescriptor.listen(backlog: 10)
-        
         Task {
+            let server = try await Socket(
+                IPv4Protocol.tcp,
+                bind: address
+            )
+            defer { Task { await server.close() } }
+            NSLog("Server: Created server socket \(server.fileDescriptor)")
+            try server.fileDescriptor.listen(backlog: 10)
+            
             NSLog("Server: Waiting on incoming connection")
             do {
                 let newConnection = await Socket(
@@ -78,6 +78,51 @@ final class SocketTests: XCTestCase {
         NSLog("Client: Connected to server")
         let read = try await client.read(data.count)
         NSLog("Client: Read incoming data")
+        XCTAssertEqual(data, read)
+    }
+    
+    func testIPv4UDPSocket() async throws {
+        let port = UInt16.random(in: 8080 ..< .max)
+        print("Using port \(port)")
+        let address = IPv4SocketAddress(address: .any, port: port)
+        let data = Data("Test \(UUID())".utf8)
+        
+        Task {
+            let server = try await Socket(
+                IPv4Protocol.udp,
+                bind: address
+            )
+            defer { Task { await server.close() } }
+            NSLog("Server: Created server socket \(server.fileDescriptor)")
+            
+            do {
+                NSLog("Server: Waiting to receive incoming message")
+                let (read, clientAddress) = try await server.receiveMessage(data.count, fromAddressOf: type(of: address))
+                NSLog("Server: Received incoming message")
+                XCTAssertEqual(data, read)
+                
+                NSLog("Server: Waiting to send outgoing message")
+                try await server.sendMessage(data, to: clientAddress)
+                NSLog("Server: Sent outgoing message")
+            } catch {
+                print("Server:", error)
+                XCTFail("\(error)")
+            }
+        }
+        
+        let client = try await Socket(
+            IPv4Protocol.udp
+        )
+        defer { Task { await client.close() } }
+        NSLog("Client: Created client socket \(client.fileDescriptor)")
+        
+        NSLog("Client: Waiting to send outgoing message")
+        try await client.sendMessage(data, to: address)
+        NSLog("Client: Sent outgoing message")
+        
+        NSLog("Client: Waiting to receive incoming message")
+        let (read, _) = try await client.receiveMessage(data.count, fromAddressOf: type(of: address))
+        NSLog("Client: Received incoming message")
         XCTAssertEqual(data, read)
     }
     
