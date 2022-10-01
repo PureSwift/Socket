@@ -437,3 +437,17 @@ internal func system_if_freenameindex(_ pointer: UnsafeMutablePointer<CInterop.I
 #endif
     return if_freenameindex(pointer)
 }
+
+internal func system_getifaddrs(_ pointer: UnsafeMutablePointer<UnsafeMutablePointer<CInterop.InterfaceLinkedList>?>) -> CInt {
+#if ENABLE_MOCKING
+    if mockingEnabled { return _mock(pointer) }
+#endif
+    return getifaddrs(pointer)
+}
+
+internal func system_freeifaddrs(_ pointer: UnsafeMutablePointer<CInterop.InterfaceLinkedList>?) {
+#if ENABLE_MOCKING
+    if mockingEnabled { return _mock(pointer) }
+#endif
+    return freeifaddrs(pointer)
+}

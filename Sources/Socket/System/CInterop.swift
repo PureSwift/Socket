@@ -67,4 +67,7 @@ public extension CInterop {
     
     /// The C `if_nameindex` type
     typealias InterfaceNameIndex = if_nameindex
+    
+    /// The C  `ifaddrs` type
+    typealias InterfaceLinkedList = ifaddrs
 }

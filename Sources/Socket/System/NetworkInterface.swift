@@ -9,18 +9,79 @@ import SystemPackage
 @_implementationOnly import CSocket
 
 /// UNIX Network Interface
-public struct NetworkInterface: Equatable, Hashable, Identifiable {
+public struct NetworkInterface <Address: SocketAddress>: Identifiable {
+    
+    public typealias ID = NetworkInterfaceID
     
     /// Interface index.
-    public let id: UInt32
+    public let id: ID
+    
+    /// Flags from SIOCGIFFLAGS
+    public let flags: UInt32
+    
+    /// Address of interface
+    public let address: Address
+    
+    /// Netmask of interface
+    public let netmask: Address?
+}
+
+public extension NetworkInterface {
+    
+    static var interfaces: [Self] {
+        get throws {
+            let interfaceIDs = try NetworkInterfaceID.interfaces
+            var linkedList: UnsafeMutablePointer<CInterop.InterfaceLinkedList>? = nil
+            guard system_getifaddrs(&linkedList) == 0 else {
+                return []
+            }
+            defer { system_freeifaddrs(linkedList) }
+            var values = [Self]()
+            var linkedListItem = linkedList
+            while let value = linkedListItem?.pointee {
+                // next item in linked list
+                defer { linkedListItem = linkedListItem?.pointee.ifa_next }
+                let interfaceName = String(cString: .init(value.ifa_name))
+                guard let id = interfaceIDs.first(where: { $0.name == interfaceName }) else {
+                    assertionFailure("Unknown interface \(interfaceName)")
+                    continue
+                }
+                guard Address.family.rawValue == value.ifa_addr.pointee.sa_family else {
+                    continue // incompatible address type
+                }
+                let address = Address.withUnsafePointer { (pointer, length) in
+                    pointer.pointee = value.ifa_addr.pointee
+                }
+                let netmask = value.ifa_netmask == nil ? nil : Address.withUnsafePointer { (pointer, length) in
+                    pointer.pointee = value.ifa_netmask.pointee
+                }
+                let interface = Self.init(
+                    id: id,
+                    flags: value.ifa_flags,
+                    address: address,
+                    netmask: netmask
+                )
+                values.append(interface)
+            }
+            return values
+        }
+    }
+}
+
+// MARK: - Supporting Types
+
+public struct NetworkInterfaceID: Equatable, Hashable {
+    
+    /// Interface index.
+    public let index: UInt32
     
     /// Interface name.
     public let name: String
 }
 
-public extension NetworkInterface {
+public extension NetworkInterfaceID {
     
-    static var interfaces: [NetworkInterface] {
+    static var interfaces: [NetworkInterfaceID] {
         get throws {
             // get null terminated list
             guard let pointer = system_if_nameindex() else {
@@ -33,15 +94,15 @@ public extension NetworkInterface {
                 count += 1
             }
             // get interfaces
-            return (0 ..< count).map { NetworkInterface(pointer[$0]) }
+            return (0 ..< count).map { NetworkInterfaceID(pointer[$0]) }
         }
     }
 }
 
-internal extension NetworkInterface {
+internal extension NetworkInterfaceID {
     
     init(_ cValue: CInterop.InterfaceNameIndex) {
-        self.id = cValue.if_index
+        self.index = cValue.if_index
         self.name = String(cString: cValue.if_name)
     }
 }

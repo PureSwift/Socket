@@ -126,11 +126,27 @@ final class SocketTests: XCTestCase {
         XCTAssertEqual(data, read)
     }
     
-    func testNetworkInterface() throws {
-        let interfaces = try NetworkInterface.interfaces
+    func testNetworkInterfaceIPv4() throws {
+        let interfaces = try NetworkInterface<IPv4SocketAddress>.interfaces
         XCTAssert(interfaces.isEmpty == false)
         for interface in interfaces {
-            print("\(interface.id). \(interface.name)")
+            print("\(interface.id.index). \(interface.id.name)")
+            print("\(interface.address.address) \(interface.address.port)")
+            if let netmask = interface.netmask {
+                print("\(netmask.address) \(netmask.port)")
+            }
+        }
+    }
+    
+    func testNetworkInterfaceIPv6() throws {
+        let interfaces = try NetworkInterface<IPv6SocketAddress>.interfaces
+        XCTAssert(interfaces.isEmpty == false)
+        for interface in interfaces {
+            print("\(interface.id.index). \(interface.id.name)")
+            print("\(interface.address.address) \(interface.address.port)")
+            if let netmask = interface.netmask {
+                print("\(netmask.address) \(netmask.port)")
+            }
         }
     }
 }
