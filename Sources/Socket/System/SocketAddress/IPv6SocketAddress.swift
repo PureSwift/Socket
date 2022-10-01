@@ -24,6 +24,13 @@ public struct IPv6SocketAddress: SocketAddress, Equatable, Hashable {
         self.port = port
     }
     
+    internal init(_ cValue: CInterop.IPv6SocketAddress) {
+        self.init(
+            address: IPv6Address(cValue.sin6_addr),
+            port: cValue.sin6_port.networkOrder
+        )
+    }
+    
     public func withUnsafePointer<Result>(
       _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws -> Result
     ) rethrows -> Result {
@@ -36,14 +43,19 @@ public struct IPv6SocketAddress: SocketAddress, Equatable, Hashable {
     }
     
     public static func withUnsafePointer(
+        _ pointer: UnsafeMutablePointer<CInterop.SocketAddress>
+    ) -> Self {
+        return pointer.withMemoryRebound(to: CInterop.IPv6SocketAddress.self, capacity: 1) { pointer in
+            return Self.init(pointer.pointee)
+        }
+    }
+    
+    public static func withUnsafePointer(
         _ body: (UnsafeMutablePointer<CInterop.SocketAddress>, UInt32) throws -> ()
     ) rethrows -> Self {
         var socketAddress = CInterop.IPv6SocketAddress()
         try socketAddress.withUnsafeMutablePointer(body)
-        return Self.init(
-            address: IPv6Address(socketAddress.sin6_addr),
-            port: socketAddress.sin6_port.networkOrder
-        )
+        return Self.init(socketAddress)
     }
 }
 

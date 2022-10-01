@@ -151,7 +151,7 @@ final class SocketTests: XCTestCase {
     }
     
     func testNetworkInterfaceLinkLayer() throws {
-        let interfaces = try NetworkInterface<LinkLayerAddress>.interfaces
+        let interfaces = try NetworkInterface<LinkLayerSocketAddress>.interfaces
         XCTAssert(interfaces.isEmpty == false)
         for interface in interfaces {
             print("\(interface.id.index). \(interface.id.name)")

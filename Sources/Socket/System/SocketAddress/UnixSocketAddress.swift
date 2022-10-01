@@ -14,10 +14,15 @@ public struct UnixSocketAddress: SocketAddress, Equatable, Hashable {
     
     public var path: FilePath
     
-    @_alwaysEmitIntoClient
     public init(path: FilePath) {
         assert(path.length < 108)
         self.path = path
+    }
+    
+    internal init(_ cValue: CInterop.UnixSocketAddress) {
+        self = withUnsafeBytes(of: cValue.sun_path) { pathPointer in
+            Self.init(path: FilePath(platformString: pathPointer.baseAddress!.assumingMemoryBound(to: CInterop.PlatformChar.self)))
+        }
     }
     
     public func withUnsafePointer<Result>(
@@ -41,8 +46,14 @@ public struct UnixSocketAddress: SocketAddress, Equatable, Hashable {
     ) rethrows -> Self {
         var socketAddress = CInterop.UnixSocketAddress()
         try socketAddress.withUnsafeMutablePointer(body)
-        return withUnsafeBytes(of: socketAddress.sun_path) { pathPointer in
-            Self.init(path: FilePath(platformString: pathPointer.baseAddress!.assumingMemoryBound(to: CInterop.PlatformChar.self)))
+        return self.init(socketAddress)
+    }
+    
+    public static func withUnsafePointer(
+        _ pointer: UnsafeMutablePointer<CInterop.SocketAddress>
+    ) -> Self {
+        pointer.withMemoryRebound(to: CInterop.UnixSocketAddress.self, capacity: 1) { pointer in
+            Self.init(pointer.pointee)
         }
     }
 }

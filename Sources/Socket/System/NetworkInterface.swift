@@ -49,12 +49,8 @@ public extension NetworkInterface {
                 guard Address.family.rawValue == value.ifa_addr.pointee.sa_family else {
                     continue // incompatible address type
                 }
-                let address = Address.withUnsafePointer { (pointer, length) in
-                    pointer.pointee = value.ifa_addr.pointee
-                }
-                let netmask = value.ifa_netmask == nil ? nil : Address.withUnsafePointer { (pointer, length) in
-                    pointer.pointee = value.ifa_netmask.pointee
-                }
+                let address = Address.withUnsafePointer(value.ifa_addr)
+                let netmask = value.ifa_netmask == nil ? nil : Address.withUnsafePointer(value.ifa_netmask)
                 let interface = Self.init(
                     id: id,
                     flags: value.ifa_flags,
