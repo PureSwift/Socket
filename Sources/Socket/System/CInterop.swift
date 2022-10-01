@@ -65,6 +65,14 @@ public extension CInterop {
     /// The C `sockaddr_in6` type
     typealias IPv6SocketAddress = sockaddr_in6
     
+    #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+    /// The C `sockaddr_dl` type
+    typealias LinkLayerAddress = sockaddr_dl
+    #elseif os(Linux)
+    /// The C `sockaddr_ll` type
+    typealias LinkLayerAddress = sockaddr_ll
+    #endif
+    
     /// The C `if_nameindex` type
     typealias InterfaceNameIndex = if_nameindex
     

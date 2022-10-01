@@ -451,3 +451,19 @@ internal func system_freeifaddrs(_ pointer: UnsafeMutablePointer<CInterop.Interf
 #endif
     return freeifaddrs(pointer)
 }
+
+#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+internal func system_link_addr(_ cString: UnsafePointer<CChar>, _ address: UnsafeMutablePointer<sockaddr_dl>) {
+#if ENABLE_MOCKING
+    if mockingEnabled { return _mock(cString) }
+#endif
+    return link_addr(cString, address)
+}
+
+internal func system_link_ntoa(_ address: UnsafePointer<sockaddr_dl>) -> UnsafeMutablePointer<CChar> {
+#if ENABLE_MOCKING
+    if mockingEnabled { return _mock(cString) }
+#endif
+    return link_ntoa(address)
+}
+#endif
