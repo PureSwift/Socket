@@ -6,6 +6,7 @@
 //
 
 #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS) || os(Linux)
+import Foundation
 import SystemPackage
 @_implementationOnly import CSocket
 
@@ -41,9 +42,9 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
         #elseif os(Linux)
         let index = cValue.sll_ifindex
         let addressLength = Int(cValue.sll_halen)
-        let address = Swift.withUnsafePointer(to: pointer.pointee.sll_addr) {
-            $0.withMemoryRebound(to: CChar.self, capacity: addressLength) {
-                (0 ..< addressLength).reduce("", { $0 + UInt16($1, radix: 16) })
+        let address = Swift.withUnsafePointer(to: cValue.sll_addr) {
+            $0.withMemoryRebound(to: CChar.self, capacity: addressLength) { pointer in
+                (0 ..< addressLength).reduce("", { $0 + ($0.isEmpty ? "" : ":") + String(format: "%02hhX", pointer[$1]) })
             }
         }
         #endif
@@ -63,6 +64,7 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
         }
         #elseif os(Linux)
         socketAddress.sll_ifindex = index
+        assertionFailure("Need to implement")
         #endif
         return try socketAddress.withUnsafePointer(body)
     }
