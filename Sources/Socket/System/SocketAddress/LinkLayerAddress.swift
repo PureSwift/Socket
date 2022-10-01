@@ -7,6 +7,7 @@
 
 #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS) || os(Linux)
 import SystemPackage
+@_implementationOnly import CSocket
 
 /// Unix Socket Address
 public struct LinkLayerAddress: SocketAddress, Equatable, Hashable {
@@ -16,7 +17,7 @@ public struct LinkLayerAddress: SocketAddress, Equatable, Hashable {
     #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
     public typealias Index = UInt16
     #elseif os(Linux)
-    public typealias Index = UInt32
+    public typealias Index = Int32
     #endif
     
     /// Index
@@ -29,13 +30,15 @@ public struct LinkLayerAddress: SocketAddress, Equatable, Hashable {
         _ body: (UnsafePointer<SystemPackage.CInterop.SocketAddress>, UInt32
         ) throws -> Result) rethrows -> Result {
         
-        var socketAddress = CInterop.LinkLayerAddress()
+        
         #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+        var socketAddress = CInterop.LinkLayerAddress()
         socketAddress.sdl_index = index
         self.address.withCString {
             system_link_addr($0, &socketAddress)
         }
         #elseif os(Linux)
+        var socketAddress = sockaddr_ll()
         socketAddress.sll_ifindex = index
         //assertionFailure()
         #endif
@@ -46,13 +49,15 @@ public struct LinkLayerAddress: SocketAddress, Equatable, Hashable {
         _ body: (UnsafeMutablePointer<SystemPackage.CInterop.SocketAddress>, UInt32) throws -> ()
     ) rethrows -> LinkLayerAddress {
         
+        #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
         var socketAddress = CInterop.LinkLayerAddress()
         try socketAddress.withUnsafeMutablePointer(body)
-        #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
         let index = socketAddress.sdl_index
         let cString = system_link_ntoa(&socketAddress)
         let address = String(cString: cString)
         #elseif os(Linux)
+        var socketAddress = sockaddr_ll()
+        try socketAddress.withUnsafeMutablePointer(body)
         let index = socketAddress.sll_ifindex
         let address = "" // FIXME:
         //assertionFailure()
@@ -64,9 +69,16 @@ public struct LinkLayerAddress: SocketAddress, Equatable, Hashable {
     }
 }
 
+#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
 extension CInterop.LinkLayerAddress: CSocketAddress {
     
     @_alwaysEmitIntoClient
     static var family: SocketAddressFamily { LinkLayerProtocol.family }
 }
+#elseif os(Linux)
+extension sockaddr_ll: CSocketAddress {
+    
+    static var family: SocketAddressFamily { LinkLayerProtocol.family }
+}
+#endif
 #endif

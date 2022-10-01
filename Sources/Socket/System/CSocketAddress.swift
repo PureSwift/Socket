@@ -1,6 +1,5 @@
 import SystemPackage
 
-@usableFromInline
 internal protocol CSocketAddress {
     
     static var family: SocketAddressFamily { get }
@@ -10,7 +9,6 @@ internal protocol CSocketAddress {
 
 internal extension CSocketAddress {
     
-    @usableFromInline
     func withUnsafePointer<Result>(
         _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws -> Result
         ) rethrows -> Result {
@@ -19,7 +17,6 @@ internal extension CSocketAddress {
         }
     }
     
-    @usableFromInline
     mutating func withUnsafeMutablePointer<Result>(
         _ body: (UnsafeMutablePointer<CInterop.SocketAddress>, UInt32) throws -> Result
         ) rethrows -> Result {

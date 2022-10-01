@@ -70,7 +70,7 @@ public extension CInterop {
     typealias LinkLayerAddress = sockaddr_dl
     #elseif os(Linux)
     /// The C `sockaddr_ll` type
-    typealias LinkLayerAddress = sockaddr_ll
+    //typealias LinkLayerAddress = sockaddr_ll
     #endif
     
     /// The C `if_nameindex` type
