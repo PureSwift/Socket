@@ -142,9 +142,9 @@ internal final class SocketManager {
     
     private func wait(for event: FileEvents, fileDescriptor: SocketDescriptor) async throws -> SocketState {
         // try to poll immediately and not wait
-        let pendingEvent = try await self.storage.update {
-            try $0.poll()
-            return try $0.events(for: fileDescriptor).contains(event) == false
+        let pendingEvent: Bool = try await self.storage.update { (state: inout SocketManager.ManagerState) throws -> (Bool) in
+            try state.poll()
+            return try state.events(for: fileDescriptor).contains(event) == false
         }
         guard pendingEvent else {
             return try await socket(for: fileDescriptor)
