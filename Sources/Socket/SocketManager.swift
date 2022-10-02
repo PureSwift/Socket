@@ -13,7 +13,7 @@ internal final class SocketManager {
     
     // MARK: - Properties
     
-    let storage = Storage()
+    private let storage = Storage()
     
     // MARK: - Initialization
     
@@ -100,35 +100,42 @@ internal final class SocketManager {
     
     @discardableResult
     func write(_ data: Data, for fileDescriptor: SocketDescriptor) async throws -> Int {
-        try await wait(for: .write, fileDescriptor: fileDescriptor)
-            .write(data)
+        try await wait(for: .write, fileDescriptor: fileDescriptor) {
+            try $0.write(data)
+        }
+            
     }
     
     @discardableResult
     func sendMessage(_ data: Data, for fileDescriptor: SocketDescriptor) async throws -> Int {
-        try await wait(for: .write, fileDescriptor: fileDescriptor)
-            .sendMessage(data)
+        try await wait(for: .write, fileDescriptor: fileDescriptor) {
+            try $0.sendMessage(data)
+        }
     }
     
     @discardableResult
     func sendMessage<Address: SocketAddress>(_ data: Data, to address: Address,  for fileDescriptor: SocketDescriptor) async throws -> Int {
-        try await wait(for: .write, fileDescriptor: fileDescriptor)
-            .sendMessage(data, to: address)
+        try await wait(for: .write, fileDescriptor: fileDescriptor) {
+            try $0.sendMessage(data, to: address)
+        }
     }
     
     func read(_ length: Int, for fileDescriptor: SocketDescriptor) async throws -> Data {
-        try await wait(for: .read, fileDescriptor: fileDescriptor)
-            .read(length)
+        try await wait(for: .read, fileDescriptor: fileDescriptor) {
+            try $0.read(length)
+        }
     }
     
     func receiveMessage(_ length: Int, for fileDescriptor: SocketDescriptor) async throws -> Data {
-        try await wait(for: .read, fileDescriptor: fileDescriptor)
-            .receiveMessage(length)
+        try await wait(for: .read, fileDescriptor: fileDescriptor) {
+            try $0.receiveMessage(length)
+        }
     }
     
     func receiveMessage<Address: SocketAddress>(_ length: Int, fromAddressOf addressType: Address.Type = Address.self, for fileDescriptor: SocketDescriptor) async throws -> (Data, Address) {
-        try await wait(for: .read, fileDescriptor: fileDescriptor)
-            .receiveMessage(length, fromAddressOf: addressType)
+        try await wait(for: .read, fileDescriptor: fileDescriptor) {
+            try $0.receiveMessage(length, fromAddressOf: addressType)
+        }
     }
     
     // MARK: - Private Methods
@@ -140,14 +147,20 @@ internal final class SocketManager {
         return socket
     }
     
-    private func wait(for event: FileEvents, fileDescriptor: SocketDescriptor) async throws -> SocketState {
+    private func wait<T>(
+        for event: FileEvents,
+        fileDescriptor: SocketDescriptor,
+        _ block: (SocketState) throws -> (T)
+    ) async throws -> T {
         // try to poll immediately and not wait
         let pendingEvent: Bool = try await self.storage.update { (state: inout SocketManager.ManagerState) throws -> (Bool) in
             try state.poll()
             return try state.events(for: fileDescriptor).contains(event) == false
         }
+        // try to execute immediately
         guard pendingEvent else {
-            return try await socket(for: fileDescriptor)
+            let socket = try await socket(for: fileDescriptor)
+            return try block(socket)
         }
         // store continuation to resume when event is polled
         try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Swift.Error>) -> () in
@@ -162,7 +175,9 @@ internal final class SocketManager {
                 }
             }
         }
-        return try await socket(for: fileDescriptor)
+        // execute after waiting
+        let socket = try await socket(for: fileDescriptor)
+        return try block(socket)
     }
 }
 
@@ -207,6 +222,7 @@ extension SocketManager.ManagerState {
     }
     
     mutating func poll() throws {
+        // build poll descriptor array
         let sockets = self.sockets
             .lazy
             .sorted(by: { $0.key.rawValue < $1.key.rawValue })
@@ -217,6 +233,7 @@ extension SocketManager.ManagerState {
             pollDescriptors.append(poll)
         }
         assert(pollDescriptors.count == sockets.count)
+        // poll sockets
         do {
             try pollDescriptors.poll()
         }
