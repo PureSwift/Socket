@@ -135,14 +135,21 @@ internal final class SocketManager {
     
     private func socket(for fileDescriptor: SocketDescriptor) async throws -> SocketState {
         guard let socket = await self.sockets[fileDescriptor] else {
-            log("Unknown socket \(fileDescriptor).")
-            assertionFailure("Unknown socket \(fileDescriptor)")
             throw Errno.socketShutdown
         }
         return socket
     }
     
     private func wait(for event: FileEvents, fileDescriptor: SocketDescriptor) async throws -> SocketState {
+        // try to poll immediately and not wait
+        let pendingEvent = try await self.storage.update {
+            try $0.poll()
+            return try $0.events(for: fileDescriptor).contains(event) == false
+        }
+        guard pendingEvent else {
+            return try await socket(for: fileDescriptor)
+        }
+        // store continuation to resume when event is polled
         try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Swift.Error>) -> () in
             // store pending continuation
             Task {
@@ -194,7 +201,7 @@ extension SocketManager.ManagerState {
     
     func events(for fileDescriptor: SocketDescriptor) throws -> FileEvents {
         guard let poll = pollDescriptors.first(where: { $0.socket == fileDescriptor }) else {
-            throw Errno.connectionAbort
+            throw Errno.socketShutdown
         }
         return poll.returnedEvents
     }
