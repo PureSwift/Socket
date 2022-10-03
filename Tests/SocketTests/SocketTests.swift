@@ -48,6 +48,7 @@ final class SocketTests: XCTestCase {
                 IPv4Protocol.tcp,
                 bind: address
             )
+            XCTAssertEqual(try server.fileDescriptor.address(IPv4SocketAddress.self), address)
             defer { Task { await server.close() } }
             NSLog("Server: Created server socket \(server.fileDescriptor)")
             try server.fileDescriptor.listen(backlog: 10)
@@ -58,6 +59,7 @@ final class SocketTests: XCTestCase {
                     fileDescriptor: try await server.fileDescriptor.accept()
                 )
                 NSLog("Server: Got incoming connection \(newConnection.fileDescriptor)")
+                XCTAssertEqual(try newConnection.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
                 let _ = try await newConnection.write(data)
                 NSLog("Server: Wrote outgoing data")
             } catch {
@@ -69,6 +71,7 @@ final class SocketTests: XCTestCase {
         let client = try await Socket(
             IPv4Protocol.tcp
         )
+        XCTAssertEqual(try client.fileDescriptor.address(IPv4SocketAddress.self).address, .any)
         defer { Task { await client.close() } }
         NSLog("Client: Created client socket \(client.fileDescriptor)")
         
@@ -76,6 +79,7 @@ final class SocketTests: XCTestCase {
         do { try await client.fileDescriptor.connect(to: address, sleep: 100_000_000) }
         catch Errno.socketIsConnected { }
         NSLog("Client: Connected to server")
+        XCTAssertEqual(try client.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
         let read = try await client.read(data.count)
         NSLog("Client: Read incoming data")
         XCTAssertEqual(data, read)

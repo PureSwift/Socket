@@ -467,3 +467,10 @@ internal func system_link_ntoa(_ address: UnsafePointer<sockaddr_dl>) -> UnsafeM
     return link_ntoa(address)
 }
 #endif
+
+internal func system_getsockname(_ fd: CInt, _ address: UnsafeMutablePointer<CInterop.SocketAddress>, _ length: UnsafeMutablePointer<UInt32>) -> CInt {
+#if ENABLE_MOCKING
+    if mockingEnabled { return _mock(fd, address) }
+#endif
+    return getsockname(fd, address, length)
+}

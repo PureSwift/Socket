@@ -616,4 +616,27 @@ extension SocketDescriptor {
         system_write(self.rawValue, buffer.baseAddress, buffer.count)
       }
     }
+    
+    @_alwaysEmitIntoClient
+    public func address<Address: SocketAddress>(
+        _ address: Address.Type,
+        retryOnInterrupt: Bool = true
+    ) throws -> Address {
+        return try _getAddress(address, retryOnInterrupt: retryOnInterrupt).get()
+    }
+    
+    @usableFromInline
+    internal func _getAddress<Address: SocketAddress>(
+        _ address: Address.Type,
+        retryOnInterrupt: Bool
+    ) -> Result<Address, Errno> {
+        var result: Result<CInt, Errno> = .success(0)
+        let address = Address.withUnsafePointer { socketPointer, socketLength in
+            var length = socketLength
+            result = valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
+                system_getsockname(self.rawValue, socketPointer, &length)
+            }
+        }
+        return result.map { _ in address }
+    }
 }
