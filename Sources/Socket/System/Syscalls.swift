@@ -474,3 +474,10 @@ internal func system_getsockname(_ fd: CInt, _ address: UnsafeMutablePointer<CIn
 #endif
     return getsockname(fd, address, length)
 }
+
+internal func system_getpeername(_ fd: CInt, _ address: UnsafeMutablePointer<CInterop.SocketAddress>, _ length: UnsafeMutablePointer<UInt32>) -> CInt {
+#if ENABLE_MOCKING
+    if mockingEnabled { return _mock(fd, address) }
+#endif
+    return getpeername(fd, address, length)
+}

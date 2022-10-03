@@ -80,6 +80,7 @@ final class SocketTests: XCTestCase {
         catch Errno.socketIsConnected { }
         NSLog("Client: Connected to server")
         XCTAssertEqual(try client.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
+        XCTAssertEqual(try client.fileDescriptor.peerAddress(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
         let read = try await client.read(data.count)
         NSLog("Client: Read incoming data")
         XCTAssertEqual(data, read)

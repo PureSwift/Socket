@@ -639,4 +639,27 @@ extension SocketDescriptor {
         }
         return result.map { _ in address }
     }
+    
+    @_alwaysEmitIntoClient
+    public func peerAddress<Address: SocketAddress>(
+        _ address: Address.Type,
+        retryOnInterrupt: Bool = true
+    ) throws -> Address {
+        return try _getPeerAddress(address, retryOnInterrupt: retryOnInterrupt).get()
+    }
+    
+    @usableFromInline
+    internal func _getPeerAddress<Address: SocketAddress>(
+        _ address: Address.Type,
+        retryOnInterrupt: Bool
+    ) -> Result<Address, Errno> {
+        var result: Result<CInt, Errno> = .success(0)
+        let address = Address.withUnsafePointer { socketPointer, socketLength in
+            var length = socketLength
+            result = valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
+                system_getpeername(self.rawValue, socketPointer, &length)
+            }
+        }
+        return result.map { _ in address }
+    }
 }
