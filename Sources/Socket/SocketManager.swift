@@ -34,14 +34,17 @@ internal final class SocketManager {
         Task.detached(priority: Socket.configuration.monitorPriority) { [unowned self] in
             while await self.isMonitoring {
                 do {
-                    try await Task.sleep(nanoseconds: Socket.configuration.monitorInterval)
-                    try await storage.update {
+                    let hasEvents = try await storage.update {
                         // poll
-                        try $0.poll()
+                        let hasEvents = try $0.poll()
                         // stop monitoring if no sockets
                         if $0.pollDescriptors.isEmpty {
                             $0.isMonitoring = false
                         }
+                        return hasEvents
+                    }
+                    if hasEvents == false {
+                        try await Task.sleep(nanoseconds: Socket.configuration.monitorInterval)
                     }
                 }
                 catch {
@@ -221,7 +224,9 @@ extension SocketManager.ManagerState {
         return poll.returnedEvents
     }
     
-    mutating func poll() throws {
+    /// Has events.
+    @discardableResult
+    mutating func poll() throws -> Bool {
         // build poll descriptor array
         let sockets = self.sockets
             .lazy
@@ -242,24 +247,28 @@ extension SocketManager.ManagerState {
             throw error
         }
         // wait for concurrent handling
-        for poll in pollDescriptors {
-            if poll.returnedEvents.contains(.write) {
-                canWrite(poll.socket)
-            }
-            if poll.returnedEvents.contains(.read) {
-                shouldRead(poll.socket)
-            }
-            if poll.returnedEvents.contains(.invalidRequest) {
-                assertionFailure("Polled for invalid socket \(poll.socket)")
-                error(.badFileDescriptor, for: poll.socket)
-            }
-            if poll.returnedEvents.contains(.hangup) {
-                error(.connectionReset, for: poll.socket)
-            }
-            if poll.returnedEvents.contains(.error) {
-                error(.connectionAbort, for: poll.socket)
+        let hasEvents = pollDescriptors.contains(where: { $0.returnedEvents.isEmpty == false })
+        if hasEvents {
+            for poll in pollDescriptors {
+                if poll.returnedEvents.contains(.write) {
+                    canWrite(poll.socket)
+                }
+                if poll.returnedEvents.contains(.read) {
+                    shouldRead(poll.socket)
+                }
+                if poll.returnedEvents.contains(.invalidRequest) {
+                    assertionFailure("Polled for invalid socket \(poll.socket)")
+                    error(.badFileDescriptor, for: poll.socket)
+                }
+                if poll.returnedEvents.contains(.hangup) {
+                    error(.connectionReset, for: poll.socket)
+                }
+                if poll.returnedEvents.contains(.error) {
+                    error(.connectionAbort, for: poll.socket)
+                }
             }
         }
+        return hasEvents
     }
     
     mutating func error(_ error: Errno, for fileDescriptor: SocketDescriptor) {
