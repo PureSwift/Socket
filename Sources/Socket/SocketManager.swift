@@ -34,15 +34,15 @@ internal final class SocketManager {
         Task.detached(priority: Socket.configuration.monitorPriority) { [unowned self] in
             while await self.isMonitoring {
                 do {
-                    let hasEvents = try await storage.update {
+                    let hasEvents = try await storage.update({ (state: inout ManagerState) -> Bool in
                         // poll
-                        let hasEvents = try $0.poll()
+                        let hasEvents = try state.poll()
                         // stop monitoring if no sockets
-                        if $0.pollDescriptors.isEmpty {
-                            $0.isMonitoring = false
+                        if state.pollDescriptors.isEmpty {
+                            state.isMonitoring = false
                         }
                         return hasEvents
-                    }
+                    })
                     if hasEvents == false {
                         try await Task.sleep(nanoseconds: Socket.configuration.monitorInterval)
                     }
