@@ -257,7 +257,6 @@ extension SocketManager.ManagerState {
                     shouldRead(poll.socket)
                 }
                 if poll.returnedEvents.contains(.invalidRequest) {
-                    assertionFailure("Polled for invalid socket \(poll.socket)")
                     error(.badFileDescriptor, for: poll.socket)
                 }
                 if poll.returnedEvents.contains(.hangup) {
