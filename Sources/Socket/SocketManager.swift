@@ -63,5 +63,7 @@ public protocol SocketManagerConfiguration {
     associatedtype Manager: SocketManager
     
     /// Manager
-    var manager: Manager { get }
+    static var manager: Manager { get }
+    
+    func configureManager()
 }

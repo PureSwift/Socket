@@ -14,7 +14,11 @@ public struct Socket {
     // MARK: - Properties
     
     /// Configuration for fine-tuning socket performance.
-    public static var configuration: any SocketManagerConfiguration = AsyncSocketManagerConfiguration()
+    public static var configuration: any SocketManagerConfiguration = AsyncSocketConfiguration() {
+        didSet {
+            configuration.configureManager()
+        }
+    }
     
     /// Underlying native socket handle.
     public let fileDescriptor: SocketDescriptor
@@ -30,7 +34,7 @@ public struct Socket {
         fileDescriptor: SocketDescriptor
     ) async {
         self.fileDescriptor = fileDescriptor
-        self.manager = Self.configuration.manager
+        self.manager = type(of: Self.configuration).manager
         self.event = await manager.add(fileDescriptor)
     }
     

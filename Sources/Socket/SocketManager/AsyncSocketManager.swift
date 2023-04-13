@@ -7,7 +7,7 @@
 
 import Foundation
 
-public struct AsyncSocketManagerConfiguration {
+public struct AsyncSocketConfiguration {
     
     /// Log
     public var log: ((String) -> ())?
@@ -29,12 +29,14 @@ public struct AsyncSocketManagerConfiguration {
     }
 }
 
-extension AsyncSocketManagerConfiguration: SocketManagerConfiguration {
+extension AsyncSocketConfiguration: SocketManagerConfiguration {
     
-    public var manager: some SocketManager {
-        let manager = AsyncSocketManager.shared
-        manager.configuration = self
-        return manager
+    public static var manager: some SocketManager {
+        AsyncSocketManager.shared
+    }
+    
+    public func configureManager() {
+        AsyncSocketManager.configuration = self
     }
 }
 
@@ -43,9 +45,9 @@ internal final class AsyncSocketManager: SocketManager {
     
     // MARK: - Properties
     
-    public var configuration = AsyncSocketManagerConfiguration()
+    static var configuration = AsyncSocketConfiguration()
     
-    private let storage = Storage()
+    fileprivate let storage = Storage()
     
     // MARK: - Initialization
     
@@ -55,7 +57,7 @@ internal final class AsyncSocketManager: SocketManager {
     
     // MARK: - Methods
     
-    func startMonitoring() async {
+    private func startMonitoring() async {
         guard await storage.update({
             guard $0.isMonitoring == false else { return false }
             log("Will start monitoring")
@@ -63,7 +65,7 @@ internal final class AsyncSocketManager: SocketManager {
             return true
         }) else { return }
         // Create top level task to monitor
-        Task.detached(priority: configuration.monitorPriority) { [unowned self] in
+        Task.detached(priority: AsyncSocketManager.configuration.monitorPriority) { [unowned self] in
             while await self.isMonitoring {
                 do {
                     let hasEvents = try await storage.update({ (state: inout ManagerState) -> Bool in
@@ -76,7 +78,7 @@ internal final class AsyncSocketManager: SocketManager {
                         return hasEvents
                     })
                     if hasEvents == false {
-                        try await Task.sleep(nanoseconds: configuration.monitorInterval)
+                        try await Task.sleep(nanoseconds: AsyncSocketManager.configuration.monitorInterval)
                     }
                 }
                 catch {
@@ -500,7 +502,7 @@ extension AsyncSocketManager.SocketState {
 
 // Socket logging
 fileprivate func log(_ message: String) {
-    if let logger = AsyncSocketManager.shared.configuration.log {
+    if let logger = AsyncSocketManager.configuration.log {
         logger(message)
     } else {
         #if DEBUG
