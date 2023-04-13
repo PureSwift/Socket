@@ -14,7 +14,7 @@ public struct Socket {
     // MARK: - Properties
     
     /// Configuration for fine-tuning socket performance.
-    public static var configuration = Socket.Configuration()
+    public static var configuration: any SocketManagerConfiguration = AsyncSocketManagerConfiguration()
     
     /// Underlying native socket handle.
     public let fileDescriptor: SocketDescriptor
@@ -29,9 +29,8 @@ public struct Socket {
     public init(
         fileDescriptor: SocketDescriptor
     ) async {
-        let manager = SocketManager.shared
         self.fileDescriptor = fileDescriptor
-        self.manager = manager
+        self.manager = Self.configuration.manager
         self.event = await manager.add(fileDescriptor)
     }
     
@@ -110,7 +109,7 @@ public struct Socket {
     
     /// Close socket.
     public func close() async {
-        await manager.remove(fileDescriptor)
+        await manager.remove(fileDescriptor, error: nil)
     }
     
     /// Get socket option.
@@ -141,19 +140,6 @@ public extension Socket {
 
 public extension Socket.Event {
     
+    /// Socket Event Stream
     typealias Stream = AsyncStream<Socket.Event>
-}
-
-public extension Socket {
-    
-    struct Configuration {
-        
-        public var log: ((String) -> ())?
-        
-        /// Task priority for backgroud socket polling.
-        public var monitorPriority: TaskPriority = .medium
-        
-        /// Interval in nanoseconds for monitoring / polling socket.
-        public var monitorInterval: UInt64 = 100_000_000
-    }
 }
