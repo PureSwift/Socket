@@ -5,12 +5,13 @@
 //  Created by Alsey Coleman Miller on 4/12/23.
 //
 
+#if canImport(Darwin)
 import Foundation
 import CoreFoundation
 import Dispatch
 
 ///
-public struct CFSocketConfiguration: SocketManagerConfiguration {
+internal struct CFSocketConfiguration: SocketManagerConfiguration {
     
     public var log: ((String) -> ())?
     
@@ -161,3 +162,5 @@ private extension CFSocketManager {
         }
     }
 }
+
+#endif
