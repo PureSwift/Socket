@@ -23,8 +23,6 @@ public struct Socket {
     /// Underlying native socket handle.
     public let fileDescriptor: SocketDescriptor
     
-    public let event: Socket.Event.Stream
-    
     internal unowned let manager: SocketManager
     
     // MARK: - Initialization
@@ -35,7 +33,7 @@ public struct Socket {
     ) async {
         self.fileDescriptor = fileDescriptor
         self.manager = type(of: Self.configuration).manager
-        self.event = await manager.add(fileDescriptor)
+        await manager.add(fileDescriptor)
     }
     
     /// Initialize
@@ -78,6 +76,16 @@ public struct Socket {
     
     // MARK: - Methods
     
+    /// Close socket.
+    public func close() async {
+        await manager.remove(fileDescriptor, error: nil)
+    }
+    
+    /// Suspend the current task until the specied events are ready.
+    public func wait(for events: FileEvents) async throws {
+        try await manager.wait(for: events, fileDescriptor: fileDescriptor)
+    }
+    
     /// Write to socket
     @discardableResult
     public func write(_ data: Data) async throws -> Int {
@@ -111,11 +119,6 @@ public struct Socket {
         try await manager.receiveMessage(length, fromAddressOf: addressType, for: fileDescriptor)
     }
     
-    /// Close socket.
-    public func close() async {
-        await manager.remove(fileDescriptor, error: nil)
-    }
-    
     /// Get socket option.
     public subscript <T: SocketOption> (_ option: T.Type) -> T {
         get throws {
@@ -127,23 +130,4 @@ public struct Socket {
     public func setOption <T: SocketOption> (_ option: T) throws {
         try fileDescriptor.setSocketOption(option)
     }
-}
-
-// MARK: - Supporting Types
-
-public extension Socket {
-    
-    /// Socket Event
-    enum Event {
-        case pendingRead
-        case read(Int)
-        case write(Int)
-        case close(Error?)
-    }
-}
-
-public extension Socket.Event {
-    
-    /// Socket Event Stream
-    typealias Stream = AsyncStream<Socket.Event>
 }
