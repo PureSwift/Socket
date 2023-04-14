@@ -127,7 +127,7 @@ internal func CFSocketManagerCallback(
     info: UnsafeRawPointer!,
     context: UnsafeMutableRawPointer!
 ) {
-    let manager: CFSocketManager = Unmanaged.fromOpaque(context).takeUnretainedValue()
+    //let manager: CFSocketManager = Unmanaged.fromOpaque(context).takeUnretainedValue()
     
     
 }

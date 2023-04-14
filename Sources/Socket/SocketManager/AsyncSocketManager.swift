@@ -205,7 +205,7 @@ extension AsyncSocketManager.ManagerState {
     
     mutating func remove(_ fileDescriptor: SocketDescriptor, error: Error? = nil) {
         guard sockets[fileDescriptor] != nil else {
-            return // could have been removed by `poll()`
+            return // could have been removed previously
         }
         log("Remove socket \(fileDescriptor) \(error?.localizedDescription ?? "")")
         // close underlying socket
@@ -269,19 +269,6 @@ extension AsyncSocketManager {
         
         func update<T>(_ block: (inout ManagerState) throws -> (T)) rethrows -> T {
             try block(&self.state)
-        }
-    }
-    
-    final class LockStorage {
-        
-        private var state = ManagerState()
-        
-        private let lock = NSLock()
-        
-        func update(_ block: (inout ManagerState) -> ()) {
-            lock.lock()
-            defer { lock.unlock() }
-            block(&self.state)
         }
     }
     
