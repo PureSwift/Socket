@@ -7,16 +7,25 @@
 
 import Foundation
 import CoreFoundation
+import Dispatch
 
 ///
 public struct CFSocketConfiguration: SocketManagerConfiguration {
     
     public var log: ((String) -> ())?
     
+    public var queue: DispatchQueue = .main
+    
+    public var timeout: CFTimeInterval = 30
+    
     public init(
-        log: ((String) -> Void)? = nil
+        log: ((String) -> Void)? = nil,
+        queue: DispatchQueue = .main,
+        timeout: CFTimeInterval = 30
     ) {
         self.log = log
+        self.queue = queue
+        self.timeout = timeout
     }
     
     public static var manager: some SocketManager {
@@ -46,7 +55,7 @@ internal actor CFSocketManager: SocketManager {
     
     // MARK: - Methods
     
-    func setConfiguration(_ newValue: CFSocketConfiguration) {
+    fileprivate func setConfiguration(_ newValue: CFSocketConfiguration) {
         self.configuration = newValue
     }
     
@@ -54,8 +63,41 @@ internal actor CFSocketManager: SocketManager {
     func add(
         _ fileDescriptor: SocketDescriptor
     ) -> Socket.Event.Stream {
-        let event = Socket.Event.Stream(bufferingPolicy: .bufferingNewest(1)) { continuation in
-            
+        guard sockets.keys.contains(fileDescriptor) == false else {
+            fatalError("Another socket for file descriptor \(fileDescriptor) already exists.")
+        }
+        log("Add socket \(fileDescriptor)")
+        // make sure its non blocking
+        do {
+            var status = try fileDescriptor.getStatus()
+            if status.contains(.nonBlocking) == false {
+                status.insert(.nonBlocking)
+                try fileDescriptor.setStatus(status)
+            }
+        }
+        catch {
+            log("Unable to set non blocking. \(error)")
+            assertionFailure("Unable to set non blocking. \(error)")
+        }
+        // create CFSocket
+        let info = Unmanaged.passUnretained(self).toOpaque()
+        var context = CFSocketContext(version: 0, info: info, retain: nil, release: nil, copyDescription: nil)
+        let callbacks: CFSocketCallBackType = [.readCallBack, .writeCallBack, .acceptCallBack, .connectCallBack]
+        guard let socket = CFSocketCreateWithNative(nil, fileDescriptor.rawValue, CFOptionFlags(callbacks.rawValue), CFSocketManagerCallback, &context) else {
+            fatalError("Unable to create socket")
+        }
+        let source = CFSocketCreateRunLoopSource(nil, socket, 0)!
+        let event = Socket.Event.Stream(bufferingPolicy: .bufferingNewest(10)) { continuation in
+            self.sockets[fileDescriptor] = SocketState(
+                fileDescriptor: fileDescriptor,
+                event: continuation,
+                socket: socket,
+                source: source
+            )
+        }
+        // add to queue run loop
+        configuration.queue.async {
+            CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.commonModes)
         }
         return event
     }
@@ -65,7 +107,15 @@ internal actor CFSocketManager: SocketManager {
         _ fileDescriptor: SocketDescriptor,
         error: Error?
     ) {
-        
+        guard let socketState = sockets[fileDescriptor] else {
+            return
+        }
+        log("Remove socket \(fileDescriptor) \(error?.localizedDescription ?? "")")
+        // close underlying socket
+        CFRunLoopSourceInvalidate(socketState.source)
+        CFSocketInvalidate(socketState.socket)
+        // update sockets to monitor
+        sockets[fileDescriptor] = nil
     }
     
     /// Write data to managed file descriptor.
@@ -73,6 +123,9 @@ internal actor CFSocketManager: SocketManager {
         _ data: Data,
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int {
+        guard let socketState = sockets[fileDescriptor] else {
+            throw Errno.badFileDescriptor
+        }
         fatalError()
     }
     
@@ -115,6 +168,16 @@ internal actor CFSocketManager: SocketManager {
     }
 }
 
+internal func CFSocketManagerCallback(
+    socket: CFSocket!,
+    callbackType: CFSocketCallBackType,
+    data: CFData!,
+    info: UnsafeRawPointer!,
+    pointer: UnsafeMutableRawPointer!
+) {
+    
+}
+
 extension CFSocketManager {
     
     struct SocketState {
@@ -124,6 +187,8 @@ extension CFSocketManager {
         let event: Socket.Event.Stream.Continuation
         
         let socket: CFSocket
+        
+        let source: CFRunLoopSource
     }
 }
 
