@@ -31,8 +31,19 @@ public struct Socket {
     public init(
         fileDescriptor: SocketDescriptor
     ) async {
+        let manager = type(of: Self.configuration).manager
+        await self.init(
+            fileDescriptor: fileDescriptor,
+            manager: manager
+        )
+    }
+    
+    internal init(
+        fileDescriptor: SocketDescriptor,
+        manager: SocketManager
+    ) async {
         self.fileDescriptor = fileDescriptor
-        self.manager = type(of: Self.configuration).manager
+        self.manager = manager
         await manager.add(fileDescriptor)
     }
     

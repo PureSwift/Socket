@@ -62,7 +62,7 @@ internal actor CFSocketManager: SocketManager {
     /// Add file descriptor
     func add(
         _ fileDescriptor: SocketDescriptor
-    ) -> Socket.Event.Stream {
+    ) {
         guard sockets.keys.contains(fileDescriptor) == false else {
             fatalError("Another socket for file descriptor \(fileDescriptor) already exists.")
         }
@@ -87,19 +87,15 @@ internal actor CFSocketManager: SocketManager {
             fatalError("Unable to create socket")
         }
         let source = CFSocketCreateRunLoopSource(nil, socket, 0)!
-        let event = Socket.Event.Stream(bufferingPolicy: .bufferingNewest(10)) { continuation in
-            self.sockets[fileDescriptor] = SocketState(
-                fileDescriptor: fileDescriptor,
-                event: continuation,
-                socket: socket,
-                source: source
-            )
-        }
+        self.sockets[fileDescriptor] = SocketState(
+            fileDescriptor: fileDescriptor,
+            socket: socket,
+            source: source
+        )
         // add to queue run loop
         configuration.queue.async {
             CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.commonModes)
         }
-        return event
     }
     
     /// Remove file descriptor
@@ -118,53 +114,8 @@ internal actor CFSocketManager: SocketManager {
         sockets[fileDescriptor] = nil
     }
     
-    /// Write data to managed file descriptor.
-    func write(
-        _ data: Data,
-        for fileDescriptor: SocketDescriptor
-    ) async throws -> Int {
-        guard let socketState = sockets[fileDescriptor] else {
-            throw Errno.badFileDescriptor
-        }
-        fatalError()
-    }
-    
-    /// Read managed file descriptor.
-    func read(
-        _ length: Int,
-        for fileDescriptor: SocketDescriptor
-    ) async throws -> Data {
-        fatalError()
-    }
-    
-    func receiveMessage(
-        _ length: Int,
-        for fileDescriptor: SocketDescriptor
-    ) async throws -> Data {
-        fatalError()
-    }
-    
-    func receiveMessage<Address: SocketAddress>(
-        _ length: Int,
-        fromAddressOf addressType: Address.Type,
-        for fileDescriptor: SocketDescriptor
-    ) async throws -> (Data, Address) {
-        fatalError()
-    }
-    
-    func sendMessage(
-        _ data: Data,
-        for fileDescriptor: SocketDescriptor
-    ) async throws -> Int {
-        fatalError()
-    }
-    
-    func sendMessage<Address: SocketAddress>(
-        _ data: Data,
-        to address: Address,
-        for fileDescriptor: SocketDescriptor
-    ) async throws -> Int {
-        fatalError()
+    func wait(for event: FileEvents, fileDescriptor: SocketDescriptor) async throws {
+        
     }
 }
 
@@ -173,8 +124,10 @@ internal func CFSocketManagerCallback(
     callbackType: CFSocketCallBackType,
     data: CFData!,
     info: UnsafeRawPointer!,
-    pointer: UnsafeMutableRawPointer!
+    context: UnsafeMutableRawPointer!
 ) {
+    let manager: CFSocketManager = Unmanaged.fromOpaque(context).takeUnretainedValue()
+    
     
 }
 
@@ -183,9 +136,7 @@ extension CFSocketManager {
     struct SocketState {
         
         let fileDescriptor: SocketDescriptor
-        
-        let event: Socket.Event.Stream.Continuation
-        
+                
         let socket: CFSocket
         
         let source: CFRunLoopSource

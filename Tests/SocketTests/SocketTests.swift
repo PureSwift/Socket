@@ -42,7 +42,6 @@ final class SocketTests: XCTestCase {
         print("Using port \(port)")
         let address = IPv4SocketAddress(address: .any, port: port)
         let data = Data("Test \(UUID())".utf8)
-        
         Task {
             let server = try await Socket(
                 IPv4Protocol.tcp,
@@ -60,6 +59,7 @@ final class SocketTests: XCTestCase {
                 )
                 NSLog("Server: Got incoming connection \(newConnection.fileDescriptor)")
                 XCTAssertEqual(try newConnection.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
+                try await Task.sleep(nanoseconds: 1_000_000_000)
                 let _ = try await newConnection.write(data)
                 NSLog("Server: Wrote outgoing data")
             } catch {
@@ -89,7 +89,10 @@ final class SocketTests: XCTestCase {
     func testIPv4UDPSocket() async throws {
         let port = UInt16.random(in: 8080 ..< .max)
         print("Using port \(port)")
-        let address = IPv4SocketAddress(address: .any, port: port)
+        let address = IPv4SocketAddress(
+            address: .any,
+            port: port
+        )
         let data = Data("Test \(UUID())".utf8)
         
         Task {
