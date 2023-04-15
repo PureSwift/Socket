@@ -10,7 +10,7 @@ import SystemPackage
 /// Native Socket handle.
 ///
 /// Same as ``FileDescriptor`` on POSIX and opaque type on Windows.
-public struct SocketDescriptor: RawRepresentable, Equatable, Hashable {
+public struct SocketDescriptor: RawRepresentable, Equatable, Hashable, Sendable {
     
     #if os(Windows)
     #error("Implement Windows support")
