@@ -92,11 +92,6 @@ public struct Socket {
         await manager.remove(fileDescriptor, error: nil)
     }
     
-    /// Suspend the current task until the specied events are ready.
-    public func wait(for events: FileEvents) async throws {
-        try await manager.wait(for: events, fileDescriptor: fileDescriptor)
-    }
-    
     /// Write to socket
     @discardableResult
     public func write(_ data: Data) async throws -> Int {
@@ -140,5 +135,29 @@ public struct Socket {
     /// Set socket option.
     public func setOption <T: SocketOption> (_ option: T) throws {
         try fileDescriptor.setSocketOption(option)
+    }
+    
+    /// Listen for connections on a socket.
+    public func listen(backlog: Int = Self.maxSocketBacklog) throws {
+        try fileDescriptor.listen(backlog: backlog)
+    }
+    
+    /// Accept new socket.
+    public func accept() async throws -> Socket {
+        let newConnection = try await manager.accept(for: fileDescriptor)
+        return await Socket(fileDescriptor: newConnection, manager: manager)
+    }
+    
+    /// Initiate a connection on a socket.
+    public func connect<Address: SocketAddress>(to address: Address) async throws {
+        try await manager.connect(to: address, for: fileDescriptor)
+    }
+}
+
+public extension Socket {
+    
+    /// Maximum queue length specifiable by listen.
+    static var maxSocketBacklog: Int {
+        Int(_SOMAXCONN)
     }
 }

@@ -54,9 +54,7 @@ final class SocketTests: XCTestCase {
             
             NSLog("Server: Waiting on incoming connection")
             do {
-                let newConnection = await Socket(
-                    fileDescriptor: try await server.fileDescriptor.accept()
-                )
+                let newConnection = try await server.accept()
                 NSLog("Server: Got incoming connection \(newConnection.fileDescriptor)")
                 XCTAssertEqual(try newConnection.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
                 try await Task.sleep(nanoseconds: 1_000_000_000)
@@ -76,7 +74,7 @@ final class SocketTests: XCTestCase {
         NSLog("Client: Created client socket \(client.fileDescriptor)")
         
         NSLog("Client: Will connect to server")
-        do { try await client.fileDescriptor.connect(to: address, sleep: 100_000_000) }
+        do { try await client.connect(to: address) }
         catch Errno.socketIsConnected { }
         NSLog("Client: Connected to server")
         XCTAssertEqual(try client.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")

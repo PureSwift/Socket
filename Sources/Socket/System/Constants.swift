@@ -316,6 +316,10 @@ internal var _IPPROTO_TCP: CInt { numericCast(IPPROTO_TCP) }
 @_alwaysEmitIntoClient
 internal var _IPPROTO_UDP: CInt { numericCast(IPPROTO_UDP) }
 
+/// Maximum queue length specifiable by listen.
+@_alwaysEmitIntoClient
+internal var _SOMAXCONN: CInt { SOMAXCONN }
+
 @_alwaysEmitIntoClient
 internal var _SOL_SOCKET: CInt { SOL_SOCKET }
 

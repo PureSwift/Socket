@@ -61,6 +61,23 @@ public protocol SocketManager: AnyObject {
         to address: Address,
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int
+    
+    /// Accept new socket.
+    func accept(
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> SocketDescriptor
+    
+    /// Accept a connection on a socket.
+    func accept<Address: SocketAddress>(
+        _ address: Address.Type,
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> (fileDescriptor: SocketDescriptor, address: Address)
+    
+    /// Initiate a connection on a socket.
+    func connect<Address: SocketAddress>(
+        to address: Address,
+        for fileDescriptor: SocketDescriptor
+    ) async throws
 }
 
 public extension SocketManager {
@@ -145,6 +162,30 @@ public extension SocketManager {
             data = data.prefix(bytesRead)
         }
         return (data, address)
+    }
+    
+    /// Accept a connection on a socket.
+    func accept(for fileDescriptor: SocketDescriptor) async throws -> SocketDescriptor {
+        try await wait(for: [.read, .write], fileDescriptor: fileDescriptor)
+        return try fileDescriptor.accept()
+    }
+    
+    /// Accept a connection on a socket.
+    func accept<Address: SocketAddress>(
+        _ address: Address.Type,
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> (fileDescriptor: SocketDescriptor, address: Address) {
+        try await wait(for: [.read, .write], fileDescriptor: fileDescriptor)
+        return try fileDescriptor.accept(address)
+    }
+    
+    /// Initiate a connection on a socket.
+    func connect<Address: SocketAddress>(
+        to address: Address,
+        for fileDescriptor: SocketDescriptor
+    ) async throws {
+        try await wait(for: [.write], fileDescriptor: fileDescriptor)
+        try fileDescriptor.connect(to: address)
     }
 }
 
