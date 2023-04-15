@@ -1,4 +1,4 @@
-// swift-tools-version: 5.5
+// swift-tools-version: 5.7
 import PackageDescription
 import class Foundation.ProcessInfo
 
@@ -24,8 +24,8 @@ var package = Package(
     dependencies: [
         .package(
             url: "https://github.com/PureSwift/swift-system",
-            .branch("feature/dynamic-lib")
-        ),
+            branch: "feature/dynamic-lib"
+        )
     ],
     targets: [
         .target(
