@@ -11,7 +11,7 @@ import CoreFoundation
 import Dispatch
 
 ///
-internal struct CFSocketConfiguration: SocketManagerConfiguration {
+internal struct CFSocketConfiguration {
     
     public var log: ((String) -> ())?
     
@@ -29,9 +29,7 @@ internal struct CFSocketConfiguration: SocketManagerConfiguration {
         self.timeout = timeout
     }
     
-    public static var manager: some SocketManager {
-        CFSocketManager.shared
-    }
+    //public static var manager: some SocketManager
     
     public func configureManager() {
         Task {
@@ -40,7 +38,7 @@ internal struct CFSocketConfiguration: SocketManagerConfiguration {
     }
 }
 
-internal actor CFSocketManager: SocketManager {
+internal actor CFSocketManager {
     
     // MARK: - Properties
     
@@ -63,7 +61,7 @@ internal actor CFSocketManager: SocketManager {
     /// Add file descriptor
     func add(
         _ fileDescriptor: SocketDescriptor
-    ) {
+    ) async -> Socket.Event.Stream {
         guard sockets.keys.contains(fileDescriptor) == false else {
             fatalError("Another socket for file descriptor \(fileDescriptor) already exists.")
         }
@@ -97,6 +95,7 @@ internal actor CFSocketManager: SocketManager {
         configuration.queue.async {
             CFRunLoopAddSource(CFRunLoopGetCurrent(), source, CFRunLoopMode.commonModes)
         }
+        fatalError()
     }
     
     /// Remove file descriptor

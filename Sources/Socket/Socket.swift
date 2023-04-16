@@ -14,7 +14,7 @@ public struct Socket {
     // MARK: - Properties
     
     /// Configuration for fine-tuning socket performance.
-    public static var configuration: any SocketManagerConfiguration = AsyncSocketConfiguration() {
+    public static var configuration: AsyncSocketConfiguration = AsyncSocketConfiguration() {
         didSet {
             configuration.configureManager()
         }
@@ -22,6 +22,8 @@ public struct Socket {
     
     /// Underlying native socket handle.
     public let fileDescriptor: SocketDescriptor
+    
+    public let event: Socket.Event.Stream
     
     internal unowned let manager: SocketManager
     
@@ -44,7 +46,7 @@ public struct Socket {
     ) async {
         self.fileDescriptor = fileDescriptor
         self.manager = manager
-        await manager.add(fileDescriptor)
+        self.event = await manager.add(fileDescriptor)
     }
     
     /// Initialize
@@ -154,6 +156,8 @@ public struct Socket {
     }
 }
 
+// MARK: - Constants
+
 public extension Socket {
     
     /// Maximum queue length specifiable by listen.
@@ -161,3 +165,40 @@ public extension Socket {
         Int(_SOMAXCONN)
     }
 }
+
+// MARK: - Supporting Types
+
+public extension Socket {
+    
+    /// Socket Event
+    enum Event {
+        
+        /// New connection
+        case connection
+        
+        /// Pending read
+        case read
+        
+        /// Pending Write
+        case write
+        
+        /// Did read
+        case didRead(Int)
+        
+        /// Did write
+        case didWrite(Int)
+        
+        /// Error ocurred
+        case error(Error)
+        
+        /// Socket closed
+        case close
+    }
+}
+
+public extension Socket.Event {
+    
+    /// Socket Event Stream
+    typealias Stream = AsyncStream<Socket.Event>
+}
+
