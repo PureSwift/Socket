@@ -18,8 +18,7 @@ public protocol SocketManager: AnyObject {
     
     /// Remove file descriptor
     func remove(
-        _ fileDescriptor: SocketDescriptor,
-        error: Error?
+        _ fileDescriptor: SocketDescriptor
     ) async
     
     /// Write data to managed file descriptor.

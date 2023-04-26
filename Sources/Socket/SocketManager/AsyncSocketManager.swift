@@ -65,7 +65,7 @@ internal final class AsyncSocketManager: SocketManager {
         guard await sockets.keys.contains(fileDescriptor) == false else {
             fatalError("Another socket for file descriptor \(fileDescriptor) already exists.")
         }
-        log("Add socket \(fileDescriptor)")
+        await log("Add socket \(fileDescriptor)")
         // make sure its non blocking
         do {
             var status = try fileDescriptor.getStatus()
@@ -75,7 +75,7 @@ internal final class AsyncSocketManager: SocketManager {
             }
         }
         catch {
-            log("Unable to set non blocking. \(error)")
+            await log("Unable to set non blocking. \(error)")
             assertionFailure("Unable to set non blocking. \(error)")
         }
         // append socket with events continuation
@@ -92,9 +92,9 @@ internal final class AsyncSocketManager: SocketManager {
         return eventStream
     }
     
-    func remove(_ fileDescriptor: SocketDescriptor, error: Error? = nil) async {
+    func remove(_ fileDescriptor: SocketDescriptor) async {
         await storage.update {
-            $0.remove(fileDescriptor, error: error)
+            $0.remove(fileDescriptor)
         }
     }
     
@@ -104,10 +104,12 @@ internal final class AsyncSocketManager: SocketManager {
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int {
         try await wait(for: .write, fileDescriptor: fileDescriptor)
-        let byteCount = try data.withUnsafeBytes {
-            try fileDescriptor.write($0)
+        return try await storage.update {
+            $0.log("Will write \(data.count) bytes to \(fileDescriptor)")
+            return try $0.socket(for: fileDescriptor) {
+                try $0.write(data)
+            }
         }
-        return byteCount
     }
     
     /// Read managed file descriptor.
@@ -116,14 +118,12 @@ internal final class AsyncSocketManager: SocketManager {
         for fileDescriptor: SocketDescriptor
     ) async throws -> Data {
         try await wait(for: .read, fileDescriptor: fileDescriptor)
-        var data = Data(count: length)
-        let bytesRead = try data.withUnsafeMutableBytes {
-            try fileDescriptor.read(into: $0)
+        return try await storage.update {
+            $0.log("Will read \(length) bytes from \(fileDescriptor)")
+            return try $0.socket(for: fileDescriptor) {
+                try $0.read(length)
+            }
         }
-        if bytesRead < length {
-            data = data.prefix(bytesRead)
-        }
-        return data
     }
     
     func sendMessage(
@@ -131,10 +131,12 @@ internal final class AsyncSocketManager: SocketManager {
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int {
         try await wait(for: .write, fileDescriptor: fileDescriptor)
-        let byteCount = try data.withUnsafeBytes {
-            try fileDescriptor.send($0)
+        return try await storage.update {
+            $0.log("Will send message with \(data.count) bytes to \(fileDescriptor)")
+            return try $0.socket(for: fileDescriptor) {
+                try $0.sendMessage(data)
+            }
         }
-        return byteCount
     }
     
     func sendMessage<Address: SocketAddress>(
@@ -143,10 +145,12 @@ internal final class AsyncSocketManager: SocketManager {
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int {
         try await wait(for: .write, fileDescriptor: fileDescriptor)
-        let byteCount = try data.withUnsafeBytes {
-            try fileDescriptor.send($0, to: address)
+        return try await storage.update {
+            $0.log("Will send message with \(data.count) bytes to \(fileDescriptor)")
+            return try $0.socket(for: fileDescriptor) {
+                try $0.sendMessage(data, to: address)
+            }
         }
-        return byteCount
     }
     
     func receiveMessage(
@@ -154,14 +158,12 @@ internal final class AsyncSocketManager: SocketManager {
         for fileDescriptor: SocketDescriptor
     ) async throws -> Data {
         try await wait(for: .read, fileDescriptor: fileDescriptor)
-        var data = Data(count: length)
-        let bytesRead = try data.withUnsafeMutableBytes {
-            try fileDescriptor.receive(into: $0)
+        return try await storage.update {
+            $0.log("Will receive message with \(length) bytes from \(fileDescriptor)")
+            return try $0.socket(for: fileDescriptor) {
+                try $0.receiveMessage(length)
+            }
         }
-        if bytesRead < length {
-            data = data.prefix(bytesRead)
-        }
-        return data
     }
     
     func receiveMessage<Address: SocketAddress>(
@@ -170,20 +172,21 @@ internal final class AsyncSocketManager: SocketManager {
         for fileDescriptor: SocketDescriptor
     ) async throws -> (Data, Address) {
         try await wait(for: .read, fileDescriptor: fileDescriptor)
-        var data = Data(count: length)
-        let (bytesRead, address) = try data.withUnsafeMutableBytes {
-            try fileDescriptor.receive(into: $0, fromAddressOf: addressType)
+        return try await storage.update {
+            $0.log("Will receive message with \(length) bytes from \(fileDescriptor)")
+            return try $0.socket(for: fileDescriptor) {
+                try $0.receiveMessage(length, fromAddressOf: addressType)
+            }
         }
-        if bytesRead < length {
-            data = data.prefix(bytesRead)
-        }
-        return (data, address)
     }
     
     /// Accept a connection on a socket.
     func accept(for fileDescriptor: SocketDescriptor) async throws -> SocketDescriptor {
-        try await wait(for: [.read, .write], fileDescriptor: fileDescriptor)
-        return try fileDescriptor.accept()
+        //try await wait(for: [.read, .write], fileDescriptor: fileDescriptor)
+        //return try fileDescriptor.accept()
+        try await retry(sleep: configuration.monitorInterval) {
+            fileDescriptor._accept(retryOnInterrupt: true)
+        }.get()
     }
     
     /// Accept a connection on a socket.
@@ -191,8 +194,11 @@ internal final class AsyncSocketManager: SocketManager {
         _ address: Address.Type,
         for fileDescriptor: SocketDescriptor
     ) async throws -> (fileDescriptor: SocketDescriptor, address: Address) {
-        try await wait(for: [.read, .write], fileDescriptor: fileDescriptor)
-        return try fileDescriptor.accept(address)
+        //try await wait(for: [.read, .write], fileDescriptor: fileDescriptor)
+        //return try fileDescriptor.accept(address)
+        try await retry(sleep: configuration.monitorInterval) {
+            fileDescriptor._accept(address, retryOnInterrupt: true)
+        }.get()
     }
     
     /// Initiate a connection on a socket.
@@ -200,8 +206,11 @@ internal final class AsyncSocketManager: SocketManager {
         to address: Address,
         for fileDescriptor: SocketDescriptor
     ) async throws {
-        try await wait(for: [.write], fileDescriptor: fileDescriptor)
-        try fileDescriptor.connect(to: address)
+        //try await wait(for: [.write], fileDescriptor: fileDescriptor)
+        //try fileDescriptor.connect(to: address)
+        try await retry(sleep: configuration.monitorInterval) {
+            fileDescriptor._connect(to: address, retryOnInterrupt: true)
+        }.get()
     }
     
     // MARK: - Private Methods
@@ -209,7 +218,7 @@ internal final class AsyncSocketManager: SocketManager {
     private func startMonitoring() async {
         guard await storage.update({
             guard $0.isMonitoring == false else { return false }
-            log("Will start monitoring")
+            $0.log("Will start monitoring")
             $0.isMonitoring = true
             return true
         }) else { return }
@@ -232,7 +241,7 @@ internal final class AsyncSocketManager: SocketManager {
                     }
                 }
                 catch {
-                    log("Socket monitoring failed. \(error.localizedDescription)")
+                    //log("Socket monitoring failed. \(error.localizedDescription)")
                     assertionFailure("Socket monitoring failed. \(error.localizedDescription)")
                     await storage.update {
                         $0.isMonitoring = false
@@ -246,24 +255,32 @@ internal final class AsyncSocketManager: SocketManager {
         return await sockets.keys.contains(fileDescriptor)
     }
     
-    private func socket(for fileDescriptor: SocketDescriptor) async throws -> SocketState {
-        guard let socket = await self.sockets[fileDescriptor] else {
-            throw Errno.socketShutdown
-        }
-        return socket
-    }
-    
-    private func wait<T>(
+    private func wait(
         for events: FileEvents,
-        fileDescriptor: SocketDescriptor,
-        _ block: (SocketState) throws -> (T)
-    ) async throws -> T {
-        try await wait(for: events, fileDescriptor: fileDescriptor)
-        // execute after waiting
-        let socket = try await socket(for: fileDescriptor)
-        return try block(socket)
+        fileDescriptor: SocketDescriptor
+    ) async throws {
+        // wait
+        await self.storage.update { state in
+            // try to execute immediately
+            guard let pendingEvents = state.sockets[fileDescriptor]?.pendingEvents,
+                pendingEvents.contains(events) == false else {
+                return
+            }
+        }
+        // store continuation to resume when event is polled
+        try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Swift.Error>) -> () in
+            // store pending continuation
+            Task {
+                await self.storage.update { state in
+                    guard state.sockets[fileDescriptor] != nil else {
+                        continuation.resume(throwing: Errno.socketShutdown)
+                        return
+                    }
+                    state.sockets[fileDescriptor]?.queue(events, continuation)
+                }
+            }
+        }
     }
-    
 }
 
 private extension AsyncSocketManager {
@@ -283,9 +300,22 @@ private extension AsyncSocketManager {
     var isMonitoring: Bool {
         get async { await storage.state.isMonitoring }
     }
+    
+    func log(_ message: String) async {
+        await storage.state.log(message)
+    }
 }
 
 extension AsyncSocketManager.ManagerState {
+    
+    mutating func socket<T>(for fileDescriptor: SocketDescriptor, _ block: (inout AsyncSocketManager.SocketState) throws -> T) throws -> T {
+        guard var socket = self.sockets[fileDescriptor] else {
+            throw Errno.socketShutdown
+        }
+        let result = try block(&socket)
+        self.sockets[fileDescriptor] = socket
+        return result
+    }
     
     mutating func remove(_ fileDescriptor: SocketDescriptor) {
         guard sockets[fileDescriptor] != nil else {
@@ -295,7 +325,7 @@ extension AsyncSocketManager.ManagerState {
         // close underlying socket
         try? fileDescriptor.close()
         // cancel all pending actions
-        //sockets[fileDescriptor]?.dequeueAll(error ?? Errno.connectionAbort)
+        sockets[fileDescriptor]?.dequeueAll(Errno.connectionAbort)
         // notify
         sockets[fileDescriptor]?.continuation.yield(.close)
         sockets[fileDescriptor]?.continuation.finish()
@@ -346,11 +376,16 @@ extension AsyncSocketManager.ManagerState {
     }
     
     mutating func process(_ poll: SocketDescriptor.Poll) {
-        if poll.returnedEvents.contains(.read) {
-            event(.read, for: poll.socket)
-        }
-        if poll.returnedEvents.contains(.write) {
-            event(.write, for: poll.socket)
+        let isListening = self.sockets[poll.socket]?.isListening ?? false
+        if isListening, poll.returnedEvents.contains([.read, .write]) {
+            event([.read, .write], notification: .connection, for: poll.socket)
+        } else {
+            if poll.returnedEvents.contains(.read) {
+                event(.read, notification: .read, for: poll.socket)
+            }
+            if poll.returnedEvents.contains(.write) {
+                event(.write, notification: .write, for: poll.socket)
+            }
         }
         if poll.returnedEvents.contains(.invalidRequest) {
             error(.badFileDescriptor, for: poll.socket)
@@ -372,7 +407,11 @@ extension AsyncSocketManager.ManagerState {
         remove(fileDescriptor)
     }
     
-    mutating func event(_ event: AsyncSocketManager.PendingEvent, for fileDescriptor: SocketDescriptor) {
+    mutating func event(
+        _ event: FileEvents,
+        notification: Socket.Event,
+        for fileDescriptor: SocketDescriptor
+    ) {
         guard var state = self.sockets[fileDescriptor] else {
             assertionFailure()
             return
@@ -381,7 +420,7 @@ extension AsyncSocketManager.ManagerState {
             return
         }
         state.pendingEvents.insert(event)
-        state.continuation.yield(.init(event))
+        state.continuation.yield(notification)
         self.sockets[fileDescriptor] = state
     }
 }
@@ -389,7 +428,6 @@ extension AsyncSocketManager.ManagerState {
 extension AsyncSocketManager.SocketState {
     
     mutating func write(_ data: Data) throws -> Int {
-        //log("Will write \(data.count) bytes to \(fileDescriptor)")
         let byteCount = try data.withUnsafeBytes {
             try fileDescriptor.write($0)
         }
@@ -399,7 +437,6 @@ extension AsyncSocketManager.SocketState {
     }
     
     mutating func sendMessage(_ data: Data) throws -> Int {
-        //log("Will send message with \(data.count) bytes to \(fileDescriptor)")
         let byteCount = try data.withUnsafeBytes {
             try fileDescriptor.send($0)
         }
@@ -409,7 +446,6 @@ extension AsyncSocketManager.SocketState {
     }
     
     mutating func sendMessage<Address: SocketAddress>(_ data: Data, to address: Address) throws -> Int {
-        //log("Will send message with \(data.count) bytes to \(fileDescriptor)")
         let byteCount = try data.withUnsafeBytes {
             try fileDescriptor.send($0, to: address)
         }
@@ -419,7 +455,6 @@ extension AsyncSocketManager.SocketState {
     }
     
     mutating func read(_ length: Int) throws -> Data {
-        //log("Will read \(length) bytes from \(fileDescriptor)")
         var data = Data(count: length)
         let bytesRead = try data.withUnsafeMutableBytes {
             try fileDescriptor.read(into: $0)
@@ -433,7 +468,6 @@ extension AsyncSocketManager.SocketState {
     }
     
     mutating func receiveMessage(_ length: Int) throws -> Data {
-        //log("Will receive message with \(length) bytes from \(fileDescriptor)")
         var data = Data(count: length)
         let bytesRead = try data.withUnsafeMutableBytes {
             try fileDescriptor.receive(into: $0)
@@ -447,7 +481,6 @@ extension AsyncSocketManager.SocketState {
     }
     
     mutating func receiveMessage<Address: SocketAddress>(_ length: Int, fromAddressOf addressType: Address.Type) throws -> (Data, Address) {
-        //log("Will receive message with \(length) bytes from \(fileDescriptor)")
         var data = Data(count: length)
         let (bytesRead, address) = try data.withUnsafeMutableBytes {
             try fileDescriptor.receive(into: $0, fromAddressOf: addressType)
@@ -461,7 +494,7 @@ extension AsyncSocketManager.SocketState {
     }
 }
 
-private extension AsyncSocketManager.SocketState {
+fileprivate extension AsyncSocketManager.SocketState {
     
     mutating func didRead(_ bytes: Int) {
         pendingEvents.remove(.read)
@@ -471,6 +504,26 @@ private extension AsyncSocketManager.SocketState {
     mutating func didWrite(_ bytes: Int) {
         pendingEvents.remove(.write)
         continuation.yield(.didWrite(bytes))
+    }
+    
+    mutating func dequeueAll(_ error: Error) {
+        // cancel all continuations
+        for event in eventContinuation.keys {
+            while let continuation = dequeue(event) {
+                continuation.resume(throwing: error)
+            }
+        }
+    }
+    
+    mutating func queue(_ event: FileEvents, _ continuation: SocketContinuation<(), Error>) {
+        eventContinuation[event, default: []].append(continuation)
+    }
+    
+    mutating func dequeue(_ event: FileEvents) -> SocketContinuation<(), Error>? {
+        guard eventContinuation[event, default: []].isEmpty == false else {
+            return nil
+        }
+        return eventContinuation[event, default: []].removeFirst()
     }
 }
 
@@ -523,7 +576,11 @@ extension AsyncSocketManager {
         
         let continuation: Socket.Event.Stream.Continuation
         
-        var pendingEvents = Set<PendingEvent>()
+        var pendingEvents: FileEvents = []
+        
+        var eventContinuation = [FileEvents: [SocketContinuation<(), Error>]]()
+        
+        var isListening = false
         
         init(
             fileDescriptor: SocketDescriptor,
@@ -531,28 +588,6 @@ extension AsyncSocketManager {
         ) {
             self.fileDescriptor = fileDescriptor
             self.continuation = continuation
-        }
-    }
-    
-    /// Socket Event
-    enum PendingEvent: Equatable, Hashable {
-        
-        /// Pending read
-        case read
-        
-        /// Pending Write
-        case write
-    }
-}
-
-internal extension Socket.Event {
-    
-    init(_ event: AsyncSocketManager.PendingEvent) {
-        switch event {
-        case .read:
-            self = .read
-        case .write:
-            self = .write
         }
     }
 }

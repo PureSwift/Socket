@@ -91,7 +91,7 @@ public struct Socket {
     
     /// Close socket.
     public func close() async {
-        await manager.remove(fileDescriptor, error: nil)
+        await manager.remove(fileDescriptor)
     }
     
     /// Write to socket
