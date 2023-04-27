@@ -42,35 +42,50 @@ final class SocketTests: XCTestCase {
         print("Using port \(port)")
         let address = IPv4SocketAddress(address: .any, port: port)
         let data = Data("Test \(UUID())".utf8)
-        Task {
-            let server = try await Socket(
-                IPv4Protocol.tcp,
-                bind: address
-            )
+        let server = try await Socket(
+            IPv4Protocol.tcp,
+            bind: address
+        )
+        let newConnectionTask = Task {
             XCTAssertEqual(try server.fileDescriptor.address(IPv4SocketAddress.self), address)
-            defer { Task { await server.close() } }
             NSLog("Server: Created server socket \(server.fileDescriptor)")
             try server.listen()
             
             NSLog("Server: Waiting on incoming connection")
-            do {
-                let newConnection = try await server.accept()
-                NSLog("Server: Got incoming connection \(newConnection.fileDescriptor)")
-                XCTAssertEqual(try newConnection.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
-                try await Task.sleep(nanoseconds: 10_000_000)
-                let _ = try await newConnection.write(data)
-                NSLog("Server: Wrote outgoing data")
-            } catch {
-                print("Server:", error)
-                XCTFail("\(error)")
+            let newConnection = try await server.accept()
+            NSLog("Server: Got incoming connection \(newConnection.fileDescriptor)")
+            XCTAssertEqual(try newConnection.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
+            let eventsTask = Task {
+                var events = [Socket.Event]()
+                for try await event in newConnection.event {
+                    events.append(event)
+                }
+                return events
             }
+            try await Task.sleep(nanoseconds: 10_000_000)
+            let _ = try await newConnection.write(data)
+            NSLog("Server: Wrote outgoing data")
+            return try await eventsTask.value
+        }
+        let serverEventsTask = Task {
+            var events = [Socket.Event]()
+            for try await event in server.event {
+                events.append(event)
+            }
+            return events
         }
         
         let client = try await Socket(
             IPv4Protocol.tcp
         )
+        let clientEventsTask = Task {
+            var events = [Socket.Event]()
+            for try await event in client.event {
+                events.append(event)
+            }
+            return events
+        }
         XCTAssertEqual(try client.fileDescriptor.address(IPv4SocketAddress.self).address, .any)
-        defer { Task { await client.close() } }
         NSLog("Client: Created client socket \(client.fileDescriptor)")
         
         NSLog("Client: Will connect to server")
@@ -82,6 +97,17 @@ final class SocketTests: XCTestCase {
         let read = try await client.read(data.count)
         NSLog("Client: Read incoming data")
         XCTAssertEqual(data, read)
+        await client.close()
+        let clientEvents = try await clientEventsTask.value
+        XCTAssertEqual(clientEvents.count, 4)
+        XCTAssertEqual("\(clientEvents)", "[Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.close]")
+        await server.close()
+        let serverEvents = try await serverEventsTask.value
+        XCTAssertEqual(serverEvents.count, 1)
+        XCTAssertEqual("\(serverEvents)", "[Socket.Socket.Event.close]")
+        let newConnectionEvents = try await newConnectionTask.value
+        XCTAssertEqual(newConnectionEvents.count, 5)
+        XCTAssertEqual("\(newConnectionEvents)", "[Socket.Socket.Event.write, Socket.Socket.Event.didWrite(41), Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.close]")
     }
     
     func testIPv4UDPSocket() async throws {
