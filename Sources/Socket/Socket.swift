@@ -150,6 +150,13 @@ public struct Socket {
         return await Socket(fileDescriptor: newConnection, manager: manager)
     }
     
+    /// Accept a connection on a socket.
+    public func accept<Address: SocketAddress>(_ address: Address.Type) async throws -> (socket: Socket, address: Address) {
+        let newConnection = try await manager.accept(address, for: fileDescriptor)
+        let socket = await Socket(fileDescriptor: newConnection.fileDescriptor, manager: manager)
+        return (socket, newConnection.address)
+    }
+    
     /// Initiate a connection on a socket.
     public func connect<Address: SocketAddress>(to address: Address) async throws {
         try await manager.connect(to: address, for: fileDescriptor)
