@@ -158,11 +158,12 @@ internal final class AsyncSocketManager: SocketManager {
     
     /// Accept a connection on a socket.
     func accept(for fileDescriptor: SocketDescriptor) async throws -> SocketDescriptor {
-        //try await wait(for: [.read, .write], fileDescriptor: fileDescriptor)
-        //return try fileDescriptor.accept()
-        try await retry(sleep: configuration.monitorInterval) {
+        let socket = try await storage.state.socket(for: fileDescriptor)
+        let result = try await retry(sleep: configuration.monitorInterval) {
             fileDescriptor._accept(retryOnInterrupt: true)
         }.get()
+        socket.continuation.yield(.connection)
+        return result
     }
     
     /// Accept a connection on a socket.
@@ -170,11 +171,12 @@ internal final class AsyncSocketManager: SocketManager {
         _ address: Address.Type,
         for fileDescriptor: SocketDescriptor
     ) async throws -> (fileDescriptor: SocketDescriptor, address: Address) {
-        //try await wait(for: [.read, .write], fileDescriptor: fileDescriptor)
-        //return try fileDescriptor.accept(address)
-        try await retry(sleep: configuration.monitorInterval) {
+        let socket = try await storage.state.socket(for: fileDescriptor)
+        let result = try await retry(sleep: configuration.monitorInterval) {
             fileDescriptor._accept(address, retryOnInterrupt: true)
         }.get()
+        socket.continuation.yield(.connection)
+        return result
     }
     
     /// Initiate a connection on a socket.
@@ -182,11 +184,11 @@ internal final class AsyncSocketManager: SocketManager {
         to address: Address,
         for fileDescriptor: SocketDescriptor
     ) async throws {
-        //try await wait(for: [.write], fileDescriptor: fileDescriptor)
-        //try fileDescriptor.connect(to: address)
+        let socket = try await storage.state.socket(for: fileDescriptor)
         try await retry(sleep: configuration.monitorInterval) {
             fileDescriptor._connect(to: address, retryOnInterrupt: true)
         }.get()
+        socket.continuation.yield(.connection)
     }
     
     // MARK: - Private Methods
@@ -323,6 +325,7 @@ extension AsyncSocketManager.ManagerState {
         pollDescriptors.reserveCapacity(sockets.count)
         let events: FileEvents = [
             .read,
+            .readUrgent,
             .write,
             .error,
             .hangup,
