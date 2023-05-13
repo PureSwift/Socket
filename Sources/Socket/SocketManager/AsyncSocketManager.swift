@@ -484,12 +484,12 @@ fileprivate extension AsyncSocketManager.SocketState {
         _ event: FileEvents,
         notification: Socket.Event
     ) {
+        dequeue(event)?.resume()
         guard pendingEvents.contains(event) == false else {
             return
         }
         pendingEvents.insert(event)
         continuation.yield(notification)
-        dequeue(event)?.resume()
     }
 }
 
