@@ -267,6 +267,10 @@ private extension AsyncSocketManager {
         try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Swift.Error>) -> () in
             // store pending continuation
             Task {
+                guard await socket.pendingEvents.contains(events) == false else {
+                    continuation.resume()
+                    return
+                }
                 await socket.queue(events, continuation)
             }
         }
