@@ -1,6 +1,6 @@
 //
 //  AsyncSocketManager.swift
-//  
+//
 //
 //  Created by Alsey Coleman Miller on 4/12/23.
 //
@@ -20,7 +20,7 @@ public struct AsyncSocketConfiguration {
     
     public init(
         log: ((String) -> ())? = nil,
-        monitorPriority: TaskPriority = .medium,
+        monitorPriority: TaskPriority = .userInitiated,
         monitorInterval: UInt64 = 100_000_000
     ) {
         self.log = log
@@ -253,26 +253,18 @@ private extension AsyncSocketManager {
         return state.sockets.keys.contains(fileDescriptor)
     }
     
-    func wait(
+    nonisolated func wait(
         for events: FileEvents,
         fileDescriptor: SocketDescriptor
     ) async throws -> SocketState {
         // wait
-        let socket = try socket(for: fileDescriptor)
+        let socket = try await socket(for: fileDescriptor)
         guard await socket.pendingEvents.contains(events) == false else {
             return socket // execute immediately
         }
-        log("Will wait for \(events) for \(fileDescriptor)")
-        // store continuation to resume when event is polled
-        try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Swift.Error>) -> () in
-            // store pending continuation
-            Task {
-                guard await socket.pendingEvents.contains(events) == false else {
-                    continuation.resume()
-                    return
-                }
-                await socket.queue(events, continuation)
-            }
+        await log("Will wait for \(events) for \(fileDescriptor)")
+        while await socket.pendingEvents.contains(events) == false {
+            try await Task.sleep(nanoseconds: state.configuration.monitorInterval)
         }
         return socket
     }
