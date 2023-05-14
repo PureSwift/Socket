@@ -80,6 +80,7 @@ internal actor AsyncSocketManager: SocketManager {
         let eventStream = Socket.Event.Stream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             state.sockets[fileDescriptor] = SocketState(
                 fileDescriptor: fileDescriptor,
+                manager: self,
                 continuation: continuation
             )
         }
@@ -262,9 +263,13 @@ private extension AsyncSocketManager {
         guard await socket.pendingEvents.contains(events) == false else {
             return socket // execute immediately
         }
-        await log("Will wait for \(events) for \(fileDescriptor)")
-        while await socket.pendingEvents.contains(events) == false {
-            try await Task.sleep(nanoseconds: state.configuration.monitorInterval)
+        // store continuation to resume when event is polled
+        try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Swift.Error>) -> () in
+            // store pending continuation
+            Task(priority: .userInitiated) {
+                await log("Will wait for \(events) for \(fileDescriptor)")
+                await socket.queue(events, continuation)
+            }
         }
         return socket
     }
@@ -462,6 +467,10 @@ fileprivate extension AsyncSocketManager.SocketState {
     }
     
     func queue(_ event: FileEvents, _ continuation: SocketContinuation<(), Error>) {
+        guard pendingEvents.contains(event) == false else {
+            continuation.resume()
+            return
+        }
         eventContinuation[event, default: []].append(continuation)
     }
     
@@ -522,6 +531,8 @@ extension AsyncSocketManager {
     actor SocketState {
         
         let fileDescriptor: SocketDescriptor
+
+        unowned let manager: AsyncSocketManager
         
         let continuation: Socket.Event.Stream.Continuation
         
@@ -533,9 +544,11 @@ extension AsyncSocketManager {
         
         init(
             fileDescriptor: SocketDescriptor,
+            manager: AsyncSocketManager,
             continuation: Socket.Event.Stream.Continuation
         ) {
             self.fileDescriptor = fileDescriptor
+            self.manager = manager
             self.continuation = continuation
         }
     }
