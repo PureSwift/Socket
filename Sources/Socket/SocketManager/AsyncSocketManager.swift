@@ -344,13 +344,13 @@ private extension AsyncSocketManager {
             }
         }*/
         if poll.returnedEvents.contains(.read) {
-            let task = Task {
+            let task = Task(priority: state.configuration.monitorPriority) {
                 await socket.event(.read, notification: .read)
             }
             tasks.append(task)
         }
         if poll.returnedEvents.contains(.write) {
-            let task = Task {
+            let task = Task(priority: state.configuration.monitorPriority) {
                 await socket.event(.write, notification: .write)
             }
             tasks.append(task)
