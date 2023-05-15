@@ -103,8 +103,8 @@ final class SocketTests: XCTestCase {
         try await Task.sleep(nanoseconds: 2_000_000_000)
         await client.close()
         let clientEvents = try await clientEventsTask.value
-        XCTAssertEqual(clientEvents.count, 5)
-        XCTAssertEqual("\(clientEvents)", "[Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.read, Socket.Socket.Event.close]")
+        XCTAssertEqual(clientEvents.count, 4)
+        XCTAssertEqual("\(clientEvents)", "[Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.close]")
         await server.close()
         let serverEvents = try await serverEventsTask.value
         XCTAssertEqual(serverEvents.count, 2)
