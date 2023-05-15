@@ -140,8 +140,8 @@ public struct Socket {
     }
     
     /// Listen for connections on a socket.
-    public func listen(backlog: Int = Self.maxSocketBacklog) throws {
-        try fileDescriptor.listen(backlog: backlog)
+    public func listen(backlog: Int = Self.maxSocketBacklog) async throws {
+        try await manager.listen(backlog: backlog, for: fileDescriptor)
     }
     
     /// Accept new socket.
@@ -208,4 +208,3 @@ public extension Socket.Event {
     /// Socket Event Stream
     typealias Stream = AsyncStream<Socket.Event>
 }
-

@@ -165,14 +165,15 @@ internal actor AsyncSocketManager: SocketManager {
         return try await socket.receiveMessage(length, fromAddressOf: addressType)
     }
     
+    nonisolated func listen(backlog: Int, for fileDescriptor: SocketDescriptor) async throws {
+        let socket = try await self.socket(for: fileDescriptor)
+        try await socket.listen(backlog: backlog)
+    }
+    
     /// Accept a connection on a socket.
     nonisolated func accept(for fileDescriptor: SocketDescriptor) async throws -> SocketDescriptor {
-        let socket = try await socket(for: fileDescriptor)
-        let result = try await retry(sleep: state.configuration.monitorInterval) {
-            fileDescriptor._accept(retryOnInterrupt: true)
-        }.get()
-        socket.continuation.yield(.connection)
-        return result
+        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
+        return try await socket.accept()
     }
     
     /// Accept a connection on a socket.
@@ -180,12 +181,8 @@ internal actor AsyncSocketManager: SocketManager {
         _ address: Address.Type,
         for fileDescriptor: SocketDescriptor
     ) async throws -> (fileDescriptor: SocketDescriptor, address: Address) {
-        let socket = try await socket(for: fileDescriptor)
-        let result = try await retry(sleep: state.configuration.monitorInterval) {
-            fileDescriptor._accept(address, retryOnInterrupt: true)
-        }.get()
-        socket.continuation.yield(.connection)
-        return result
+        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
+        return try await socket.accept(address)
     }
     
     /// Initiate a connection on a socket.
@@ -224,7 +221,7 @@ private extension AsyncSocketManager {
         var tasks = [Task<Void, Never>]()
         while self.state.isMonitoring {
             do {
-                tasks.reserveCapacity(state.sockets.count * 2)
+                tasks.reserveCapacity(state.sockets.count)
                 // poll
                 let hasEvents = try poll(&tasks)
                 // stop monitoring if no sockets
@@ -331,39 +328,28 @@ private extension AsyncSocketManager {
     }
     
     func process(_ poll: SocketDescriptor.Poll, socket: AsyncSocketManager.SocketState, tasks: inout [Task<Void, Never>]) {
-        /*
-        let isListening = self.sockets[poll.socket]?.isListening ?? false
-        if isListening, poll.returnedEvents.contains([.read, .write]) {
-            event([.read, .write], notification: .connection, for: poll.socket)
-        } else {
+        let task = Task {
             if poll.returnedEvents.contains(.read) {
-                event(.read, notification: .read, for: poll.socket)
+                if await socket.isListening {
+                    await socket.event(.read, notification: .connection)
+                } else {
+                    await socket.event(.read, notification: .read)
+                }
             }
             if poll.returnedEvents.contains(.write) {
-                event(.write, notification: .write, for: poll.socket)
-            }
-        }*/
-        if poll.returnedEvents.contains(.read) {
-            let task = Task(priority: state.configuration.monitorPriority) {
-                await socket.event(.read, notification: .read)
-            }
-            tasks.append(task)
-        }
-        if poll.returnedEvents.contains(.write) {
-            let task = Task(priority: state.configuration.monitorPriority) {
                 await socket.event(.write, notification: .write)
             }
-            tasks.append(task)
+            if poll.returnedEvents.contains(.invalidRequest) {
+                error(.badFileDescriptor, for: poll.socket)
+            }
+            if poll.returnedEvents.contains(.error) {
+                error(.connectionReset, for: poll.socket)
+            }
+            if poll.returnedEvents.contains(.hangup) {
+                hangup(poll.socket)
+            }
         }
-        if poll.returnedEvents.contains(.invalidRequest) {
-            error(.badFileDescriptor, for: poll.socket)
-        }
-        if poll.returnedEvents.contains(.error) {
-            error(.connectionReset, for: poll.socket)
-        }
-        if poll.returnedEvents.contains(.hangup) {
-            hangup(poll.socket)
-        }
+        tasks.append(task)
     }
     
     func error(_ error: Errno, for fileDescriptor: SocketDescriptor) {
@@ -442,6 +428,19 @@ extension AsyncSocketManager.SocketState {
         // notify
         didRead(bytesRead)
         return (data, address)
+    }
+    
+    func listen(backlog: Int) throws {
+        try fileDescriptor.listen(backlog: backlog)
+        isListening = true
+    }
+    
+    func accept() throws -> SocketDescriptor {
+        try fileDescriptor.accept()
+    }
+    
+    func accept<Address: SocketAddress>(_ address: Address.Type) throws -> (SocketDescriptor, Address) {
+        try fileDescriptor.accept(address)
     }
 }
 

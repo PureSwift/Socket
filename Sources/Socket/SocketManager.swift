@@ -71,6 +71,12 @@ public protocol SocketManager: AnyObject {
         to address: Address,
         for fileDescriptor: SocketDescriptor
     ) async throws
+    
+    /// Listen for incoming connections
+    func listen(
+        backlog: Int,
+        for fileDescriptor: SocketDescriptor
+    ) async throws
 }
 
 /// Socket Manager Configuration
