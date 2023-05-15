@@ -100,7 +100,7 @@ final class SocketTests: XCTestCase {
         let read = try await client.read(data.count)
         NSLog("Client: Read incoming data")
         XCTAssertEqual(data, read)
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try await Task.sleep(nanoseconds: 2_000_000_000)
         await client.close()
         let clientEvents = try await clientEventsTask.value
         XCTAssertEqual(clientEvents.count, 5)
