@@ -234,9 +234,8 @@ private extension AsyncSocketManager {
                 }
                 tasks.removeAll(keepingCapacity: true)
                 // sleep
-                if hasEvents == false {
-                    try await Task.sleep(nanoseconds: state.configuration.monitorInterval)
-                }
+                let sleepInterval = state.configuration.monitorInterval * (hasEvents ? 1 : 2)
+                try await Task.sleep(nanoseconds: sleepInterval)
             }
             catch {
                 log("Socket monitoring failed. \(error.localizedDescription)")
@@ -321,20 +320,17 @@ private extension AsyncSocketManager {
                     preconditionFailure()
                     continue
                 }
-                process(poll, socket: state, tasks: &tasks)
+                let task = process(poll, socket: state)
+                tasks.append(task)
             }
         }
         return hasEvents
     }
     
-    func process(_ poll: SocketDescriptor.Poll, socket: AsyncSocketManager.SocketState, tasks: inout [Task<Void, Never>]) {
-        let task = Task {
+    func process(_ poll: SocketDescriptor.Poll, socket: AsyncSocketManager.SocketState) -> Task<Void, Never> {
+        Task(priority: state.configuration.monitorPriority) {
             if poll.returnedEvents.contains(.read) {
-                if await socket.isListening {
-                    await socket.event(.read, notification: .connection)
-                } else {
-                    await socket.event(.read, notification: .read)
-                }
+                await socket.event(.read, notification: socket.isListening ? .connection : .read)
             }
             if poll.returnedEvents.contains(.write) {
                 await socket.event(.write, notification: .write)
@@ -349,7 +345,6 @@ private extension AsyncSocketManager {
                 hangup(poll.socket)
             }
         }
-        tasks.append(task)
     }
     
     func error(_ error: Errno, for fileDescriptor: SocketDescriptor) {
