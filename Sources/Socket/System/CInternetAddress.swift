@@ -18,8 +18,10 @@ internal extension CInternetAddress {
         /**
          inet_pton() returns 1 on success (network address was successfully converted). 0 is returned if src does not contain a character string representing a valid network address in the specified address family. If af does not contain a valid address family, -1 is returned and errno is set to EAFNOSUPPORT.
         */
-        let result = string.withCString {
-            system_inet_pton(Self.family.rawValue, $0, &self)
+        let result = string.withCString { stringPointer in
+            withUnsafeMutablePointer(to: &self) { selfPointer in
+                system_inet_pton(Self.family.rawValue, stringPointer, selfPointer)
+            }
         }
         guard result == 1 else {
             assert(result != -1, "Invalid address family")
