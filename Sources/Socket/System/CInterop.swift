@@ -2,11 +2,20 @@ import SystemPackage
 
 #if canImport(Darwin)
 import Darwin
-#elseif os(Linux) || os(FreeBSD) || os(Android)
-import Glibc
 #elseif os(Windows)
-import CSocket
+import CSystem
 import ucrt
+#elseif canImport(Glibc)
+@_implementationOnly import CSystem
+import Glibc
+#elseif canImport(Musl)
+@_implementationOnly import CSystem
+import Musl
+#elseif canImport(WASILibc)
+import WASILibc
+#elseif canImport(Bionic)
+@_implementationOnly import CSystem
+import Bionic
 #else
 #error("Unsupported Platform")
 #endif
