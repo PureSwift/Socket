@@ -7,7 +7,7 @@ jobs:
     name: Build
     strategy:
       matrix:
-        swift: [5.7.3, 5.8]
+        swift: [6.0.2]
         os: [ubuntu-20.04, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
@@ -28,7 +28,7 @@ jobs:
     name: Test Linux
     strategy:
       matrix:
-        swift: [5.7.3, 5.8]
+        swift: [6.0.2]
         os: [ubuntu-20.04]
     runs-on: ${{ matrix.os }}
     steps:
@@ -53,6 +53,10 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
+    - name: Install Swift
+      uses: slashmo/install-swift@v0.3.0
+      with:
+        version: 6.0.2
     - name: Swift Version
       run: swift --version
     - name: Test (Debug)
