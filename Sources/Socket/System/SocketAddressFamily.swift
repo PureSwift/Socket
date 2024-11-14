@@ -1,7 +1,7 @@
 
 /// POSIX Socket Address Family
 @frozen
-public struct SocketAddressFamily: RawRepresentable, Hashable, Codable {
+public struct SocketAddressFamily: RawRepresentable, Hashable, Codable, Sendable {
     
   /// The raw socket address family identifier.
   @_alwaysEmitIntoClient

@@ -1,7 +1,7 @@
 
 /// Message Flags
 @frozen
-public struct MessageFlags: OptionSet, Hashable, Codable {
+public struct MessageFlags: OptionSet, Hashable, Codable, Sendable {
     
   /// The raw C file permissions.
   @_alwaysEmitIntoClient

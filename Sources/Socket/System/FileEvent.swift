@@ -3,7 +3,7 @@ import SystemPackage
 /// File Events bitmask
 @frozen
 // @available(macOS 10.16, iOS 14.0, watchOS 7.0, tvOS 14.0, *)
-public struct FileEvents: OptionSet, Hashable, Codable {
+public struct FileEvents: OptionSet, Hashable, Codable, Sendable {
     
     /// The raw C file events.
     @_alwaysEmitIntoClient

@@ -1,6 +1,6 @@
 
 /// POSIX Socket Protocol
-public protocol SocketProtocol: RawRepresentable {
+public protocol SocketProtocol: RawRepresentable, Sendable {
     
     static var family: SocketAddressFamily { get }
     

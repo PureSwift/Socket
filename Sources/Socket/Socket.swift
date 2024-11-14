@@ -140,7 +140,7 @@ public struct Socket: Sendable {
     }
     
     /// Listen for connections on a socket.
-    public func listen(backlog: Int = Self.maxSocketBacklog) async throws {
+    public func listen(backlog: Int = Self.maxBacklog) async throws {
         try await manager.listen(backlog: backlog, for: fileDescriptor)
     }
     
@@ -168,7 +168,7 @@ public struct Socket: Sendable {
 public extension Socket {
     
     /// Maximum queue length specifiable by listen.
-    static var maxSocketBacklog: Int {
+    static var maxBacklog: Int {
         Int(_SOMAXCONN)
     }
 }

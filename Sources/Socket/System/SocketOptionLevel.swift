@@ -1,7 +1,7 @@
 
 // POSIX Socket Option Level
 @frozen
-public struct SocketOptionLevel: RawRepresentable, Hashable, Codable {
+public struct SocketOptionLevel: RawRepresentable, Hashable, Codable, Sendable {
     
   /// The raw socket address family identifier.
   @_alwaysEmitIntoClient

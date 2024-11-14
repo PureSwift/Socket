@@ -80,7 +80,7 @@ public protocol SocketManager: AnyObject, Sendable {
 }
 
 /// Socket Manager Configuration
-public protocol SocketManagerConfiguration {
+public protocol SocketManagerConfiguration: Sendable {
     
     associatedtype Manager: SocketManager
     

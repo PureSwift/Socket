@@ -9,7 +9,7 @@ import Foundation
 import SystemPackage
 
 #if DEBUG
-internal struct SocketContinuation<T, E> where E: Error, T: Sendable {
+internal struct SocketContinuation<T, E>: Sendable where E: Error, T: Sendable {
     
     private let function: String
     

@@ -3,7 +3,7 @@ import CSocket
 
 /// Flags when opening sockets.
 @frozen
-public struct SocketFlags: OptionSet, Hashable, Codable {
+public struct SocketFlags: OptionSet, Hashable, Codable, Sendable {
     
     /// The raw C file events.
     @_alwaysEmitIntoClient

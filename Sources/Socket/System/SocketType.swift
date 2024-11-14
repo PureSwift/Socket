@@ -1,11 +1,8 @@
-#if canImport(Darwin)
-import Darwin
-#endif
 import SystemPackage
 
 /// POSIX Socket Type
 @frozen
-public struct SocketType: RawRepresentable, Hashable, Codable {
+public struct SocketType: RawRepresentable, Hashable, Sendable {
     
   /// The raw socket type identifier.
   @_alwaysEmitIntoClient
@@ -23,6 +20,14 @@ public struct SocketType: RawRepresentable, Hashable, Codable {
       #endif
   }
 }
+
+// MARK: - Codable
+
+#if !hasFeature(Embedded)
+extension SocketType: Codable { }
+#endif
+
+// MARK: - Constants
 
 public extension SocketType {
     

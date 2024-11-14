@@ -10,7 +10,7 @@ public protocol SocketOptionID: RawRepresentable {
 }
 
 @frozen
-public struct GenericSocketOption: RawRepresentable, Equatable, Hashable, SocketOptionID {
+public struct GenericSocketOption: RawRepresentable, Equatable, Hashable, SocketOptionID, Sendable {
     
     @_alwaysEmitIntoClient
     public static var optionLevel: SocketOptionLevel { .default }

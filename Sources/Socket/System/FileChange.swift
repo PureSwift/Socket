@@ -96,7 +96,7 @@ public extension SocketDescriptor {
 }
 
 @usableFromInline
-internal struct FileChangeID: RawRepresentable, Hashable, Codable {
+internal struct FileChangeID: RawRepresentable, Hashable, Codable, Sendable {
     
     /// The raw C file handle.
     @_alwaysEmitIntoClient

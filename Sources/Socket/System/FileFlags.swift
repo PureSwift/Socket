@@ -11,7 +11,7 @@ public extension FileDescriptor {
     
     /// Options that specify behavior for file descriptors.
     @frozen
-    struct Flags: OptionSet, Hashable, Codable {
+    struct Flags: OptionSet, Hashable, Codable, Sendable {
         
         /// The raw C options.
         @_alwaysEmitIntoClient

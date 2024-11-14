@@ -2,7 +2,7 @@ import SystemPackage
 
 /// Internet Protocol Address
 @frozen
-public enum IPAddress: Equatable, Hashable, Codable {
+public enum IPAddress: Equatable, Hashable, Codable, Sendable {
     
     /// IPv4
     case v4(IPv4Address)
@@ -58,7 +58,7 @@ extension IPAddress: CustomStringConvertible, CustomDebugStringConvertible {
 
 /// IPv4 Socket Address
 @frozen
-public struct IPv4Address: Equatable, Hashable, Codable {
+public struct IPv4Address: Equatable, Hashable, Codable, Sendable {
     
     @usableFromInline
     internal let bytes: CInterop.IPv4Address
@@ -128,7 +128,7 @@ extension IPv4Address: CustomStringConvertible, CustomDebugStringConvertible {
 
 /// IPv6 Socket Address
 @frozen
-public struct IPv6Address: Equatable, Hashable, Codable {
+public struct IPv6Address: Equatable, Hashable, Codable, Sendable {
     
     @usableFromInline
     internal let bytes: CInterop.IPv6Address
