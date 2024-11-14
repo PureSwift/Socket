@@ -18,7 +18,7 @@ extension SocketDescriptor {
     /// If `body` throws an error
     /// or an error occurs while closing the file descriptor,
     /// this method rethrows that error.
-    public func closeAfter<R>(_ body: () throws -> R) throws -> R {
+    public func closeAfter<R>(_ body: () throws(Errno) -> R) throws(Errno) -> R {
       // No underscore helper, since the closure's throw isn't necessarily typed.
       let result: R
       do {
@@ -42,7 +42,7 @@ extension SocketDescriptor {
     /// If `body` throws an error
     /// this method rethrows that error.
     @_alwaysEmitIntoClient
-    public func closeIfThrows<R>(_ body: () throws -> R) throws -> R {
+    public func closeIfThrows<R>(_ body: () throws(Errno) -> R) throws(Errno) -> R {
         do {
           return try body()
         } catch {
