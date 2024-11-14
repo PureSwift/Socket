@@ -9,7 +9,7 @@ import SystemPackage
 import CSocket
 
 /// UNIX Network Interface
-public struct NetworkInterface <Address: SocketAddress>: Identifiable {
+public struct NetworkInterface <Address: SocketAddress>: Identifiable, Sendable {
     
     public typealias ID = NetworkInterfaceID
     
@@ -26,14 +26,18 @@ public struct NetworkInterface <Address: SocketAddress>: Identifiable {
     public let netmask: Address?
 }
 
+extension NetworkInterface: Equatable where Address: Equatable { }
+
+extension NetworkInterface: Hashable where Address: Hashable { }
+
 public extension NetworkInterface {
     
     static var interfaces: [Self] {
-        get throws {
+        get throws(Errno) {
             let interfaceIDs = try NetworkInterfaceID.interfaces
             var linkedList: UnsafeMutablePointer<CInterop.InterfaceLinkedList>? = nil
             guard system_getifaddrs(&linkedList) == 0 else {
-                return []
+                throw Errno.current
             }
             defer { system_freeifaddrs(linkedList) }
             var values = [Self]()
@@ -66,7 +70,7 @@ public extension NetworkInterface {
 
 // MARK: - Supporting Types
 
-public struct NetworkInterfaceID: Equatable, Hashable {
+public struct NetworkInterfaceID: Equatable, Hashable, Sendable {
     
     /// Interface index.
     public let index: UInt32

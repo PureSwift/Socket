@@ -7,9 +7,9 @@ public protocol SocketAddress: Sendable {
     associatedtype ProtocolID: SocketProtocol
     
     /// Unsafe pointer closure
-    func withUnsafePointer<Result>(
-      _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws -> Result
-    ) rethrows -> Result
+    func withUnsafePointer<Result, Error>(
+      _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws(Error) -> Result
+    ) rethrows -> Result where Error: Swift.Error
     
     static func withUnsafePointer(
         _ pointer: UnsafeMutablePointer<CInterop.SocketAddress>

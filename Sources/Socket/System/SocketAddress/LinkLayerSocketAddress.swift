@@ -50,9 +50,9 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
         self.address = address
     }
     
-    public func withUnsafePointer<Result>(
-        _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32
-        ) throws -> Result) rethrows -> Result {
+    public func withUnsafePointer<Result, Error>(
+      _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws(Error) -> Result
+    ) rethrows -> Result where Error: Swift.Error {
         
         var socketAddress = CSocketAddressType()
         #if canImport(Darwin)

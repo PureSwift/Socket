@@ -31,9 +31,9 @@ public struct IPv4SocketAddress: SocketAddress, Equatable, Hashable {
         )
     }
     
-    public func withUnsafePointer<Result>(
-      _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws -> Result
-    ) rethrows -> Result {
+    public func withUnsafePointer<Result, Error>(
+      _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws(Error) -> Result
+    ) rethrows -> Result where Error: Swift.Error {
         
         var socketAddress = CInterop.IPv4SocketAddress()
         socketAddress.sin_family = numericCast(Self.family.rawValue)
