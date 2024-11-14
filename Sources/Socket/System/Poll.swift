@@ -81,7 +81,7 @@ extension SocketDescriptor {
         )
         return nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
             system_poll(&pollFD, 1, timeout)
-        }.map { FileEvents(rawValue: events.rawValue) }
+        }.map { FileEvents(rawValue: pollFD.revents) }
     }
 }
 
