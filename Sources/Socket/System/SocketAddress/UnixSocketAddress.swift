@@ -35,7 +35,7 @@ public struct UnixSocketAddress: SocketAddress, Equatable, Hashable {
                 pathBytes
                     .bindMemory(to: CInterop.PlatformChar.self)
                     .baseAddress!
-                    .assign(from: platformString, count: path.length + 1)
+                    .update(from: platformString, count: path.length + 1)
             }
             return try socketAddress.withUnsafePointer(body)
         }

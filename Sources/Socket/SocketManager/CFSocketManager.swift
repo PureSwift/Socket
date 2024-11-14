@@ -7,7 +7,7 @@
 
 #if canImport(Darwin)
 import Foundation
-import CoreFoundation
+@preconcurrency import CoreFoundation
 import Dispatch
 
 ///
@@ -30,12 +30,12 @@ internal struct CFSocketConfiguration {
     }
     
     //public static var manager: some SocketManager
-    
+    /*
     public func configureManager() {
         Task {
             await CFSocketManager.shared.setConfiguration(self)
         }
-    }
+    }*/
 }
 
 internal actor CFSocketManager {

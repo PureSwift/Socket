@@ -7,10 +7,10 @@
 
 import Foundation
 
-public struct AsyncSocketConfiguration {
+public struct AsyncSocketConfiguration: Sendable {
     
     /// Log
-    public var log: ((String) -> ())?
+    public var log: (@Sendable (String) -> ())?
     
     /// Task priority for backgroud socket polling.
     public var monitorPriority: TaskPriority
@@ -19,7 +19,7 @@ public struct AsyncSocketConfiguration {
     public var monitorInterval: UInt64
     
     public init(
-        log: ((String) -> ())? = nil,
+        log: (@Sendable (String) -> ())? = nil,
         monitorPriority: TaskPriority = .userInitiated,
         monitorInterval: UInt64 = 100_000_000
     ) {
@@ -159,7 +159,7 @@ internal actor AsyncSocketManager: SocketManager {
         _ length: Int,
         fromAddressOf addressType: Address.Type,
         for fileDescriptor: SocketDescriptor
-    ) async throws -> (Data, Address) {
+    ) async throws -> (Data, Address) where Address: Sendable {
         let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
         await log("Will receive message with \(length) bytes from \(fileDescriptor)")
         return try await socket.receiveMessage(length, fromAddressOf: addressType)
@@ -180,7 +180,7 @@ internal actor AsyncSocketManager: SocketManager {
     nonisolated func accept<Address: SocketAddress>(
         _ address: Address.Type,
         for fileDescriptor: SocketDescriptor
-    ) async throws -> (fileDescriptor: SocketDescriptor, address: Address) {
+    ) async throws -> (fileDescriptor: SocketDescriptor, address: Address) where Address: Sendable {
         let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
         return try await socket.accept(address)
     }
@@ -511,7 +511,7 @@ extension AsyncSocketManager {
 
 extension AsyncSocketManager {
     
-    struct ManagerState {
+    struct ManagerState: Sendable {
         
         var configuration = AsyncSocketConfiguration()
         
@@ -522,7 +522,7 @@ extension AsyncSocketManager {
         var isMonitoring = false
     }
     
-    actor SocketState {
+    actor SocketState: Sendable {
         
         let fileDescriptor: SocketDescriptor
 

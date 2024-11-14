@@ -1,7 +1,7 @@
 import SystemPackage
 
 /// Socket Address
-public protocol SocketAddress {
+public protocol SocketAddress: Sendable {
     
     /// Socket Protocol
     associatedtype ProtocolID: SocketProtocol

@@ -9,7 +9,7 @@ import Foundation
 import SystemPackage
 
 /// Socket Manager
-public protocol SocketManager: AnyObject {
+public protocol SocketManager: AnyObject, Sendable {
     
     /// Add file descriptor
     func add(

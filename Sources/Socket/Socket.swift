@@ -9,12 +9,12 @@ import Foundation
 @_exported import SystemPackage
 
 /// Socket
-public struct Socket {
+public struct Socket: Sendable {
     
     // MARK: - Properties
     
     /// Configuration for fine-tuning socket performance.
-    public static var configuration: AsyncSocketConfiguration = AsyncSocketConfiguration() {
+    nonisolated(unsafe) public static var configuration: AsyncSocketConfiguration = AsyncSocketConfiguration() {
         didSet {
             configuration.configureManager()
         }
@@ -178,7 +178,7 @@ public extension Socket {
 public extension Socket {
     
     /// Socket Event
-    enum Event {
+    enum Event: Sendable {
         
         /// New connection
         case connection

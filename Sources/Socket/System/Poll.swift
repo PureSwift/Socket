@@ -3,7 +3,7 @@ import SystemPackage
 public extension SocketDescriptor {
     
     /// Poll File Descriptor
-    struct Poll {
+    struct Poll: Sendable {
         
         internal fileprivate(set) var bytes: CInterop.PollFileDescriptor
         
