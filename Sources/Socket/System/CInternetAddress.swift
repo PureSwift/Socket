@@ -33,7 +33,7 @@ internal extension CInternetAddress {
 internal extension String {
     
     @usableFromInline
-    init<T: CInternetAddress>(_ cInternetAddress: T) throws {
+    init<T: CInternetAddress>(_ cInternetAddress: T) throws(Errno) {
         let cString = UnsafeMutablePointer<CChar>.allocate(capacity: T.stringLength)
         defer { cString.deallocate() }
         let success = withUnsafePointer(to: cInternetAddress) {

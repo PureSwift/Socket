@@ -1,6 +1,6 @@
 import SystemPackage
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 import Darwin
 #elseif os(Linux) || os(FreeBSD) || os(Android)
 import Glibc
@@ -34,7 +34,7 @@ internal var _O_NONBLOCK: CInt { O_NONBLOCK }
 @_alwaysEmitIntoClient
 internal var _O_APPEND: CInt { O_APPEND }
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _O_SHLOCK: CInt { O_SHLOCK }
 
@@ -60,7 +60,7 @@ internal var _O_TRUNC: CInt { O_TRUNC }
 @_alwaysEmitIntoClient
 internal var _O_EXCL: CInt { O_EXCL }
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _O_EVTONLY: CInt { O_EVTONLY }
 #endif
@@ -74,7 +74,7 @@ internal var _O_NOCTTY: CInt { O_NOCTTY }
 internal var _O_DIRECTORY: CInt { O_DIRECTORY }
 #endif
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _O_SYMLINK: CInt { O_SYMLINK }
 #endif
@@ -93,7 +93,7 @@ internal var _SEEK_CUR: CInt { SEEK_CUR }
 @_alwaysEmitIntoClient
 internal var _SEEK_END: CInt { SEEK_END }
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _SEEK_HOLE: CInt { SEEK_HOLE }
 
@@ -196,7 +196,7 @@ internal var _AF_VSOCK: CInt { AF_VSOCK }
 internal var _AF_ISDN: CInt { AF_ISDN }
 #endif
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _AF_IMPLINK: CInt { AF_IMPLINK }
 
@@ -341,7 +341,7 @@ internal var _SO_DONTROUTE: CInt { SO_DONTROUTE }
 @_alwaysEmitIntoClient
 internal var _SO_BROADCAST: CInt { SO_BROADCAST }
   
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _SO_USELOOPBACK: CInt { SO_USELOOPBACK }
 #endif
@@ -381,7 +381,7 @@ internal var _MSG_WAITALL: CInt { numericCast(MSG_WAITALL) } /* wait for full re
 @_alwaysEmitIntoClient
 internal var _MSG_DONTWAIT: CInt { numericCast(MSG_DONTWAIT) } /* this message should be nonblocking */
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _MSG_EOF: CInt { numericCast(MSG_EOF) } /* data completes connection */
 
@@ -416,7 +416,7 @@ internal var _MSG_MORE: CInt { numericCast(MSG_MORE) }
 
 @_alwaysEmitIntoClient
 internal var _fd_set_count: Int {
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
     // __DARWIN_FD_SETSIZE is number of *bits*, so divide by number bits in each element to get element count
     // at present this is 1024 / 32 == 32
     return Int(__DARWIN_FD_SETSIZE) / 32

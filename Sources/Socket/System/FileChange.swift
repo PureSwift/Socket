@@ -7,7 +7,7 @@ public extension SocketDescriptor {
     func duplicate(
         closeOnExec: Bool,
         retryOnInterrupt: Bool = true
-    ) throws -> FileDescriptor {
+    ) throws(Errno) -> FileDescriptor {
         let fileDescriptor = try _change(
             closeOnExec ? .duplicateCloseOnExec : .duplicate,
             self.rawValue,
@@ -18,7 +18,7 @@ public extension SocketDescriptor {
     
     /// Get Flags
     @_alwaysEmitIntoClient
-    func getFlags(retryOnInterrupt: Bool = true) throws -> FileDescriptor.Flags {
+    func getFlags(retryOnInterrupt: Bool = true) throws(Errno) -> FileDescriptor.Flags {
         let rawValue = try _change(
             .getFileDescriptorFlags,
             retryOnInterrupt: retryOnInterrupt
@@ -31,7 +31,7 @@ public extension SocketDescriptor {
     func setFlags(
         _ newValue: FileDescriptor.Flags,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         let _ = try _change(
             .setFileDescriptorFlags,
             newValue.rawValue,
@@ -41,7 +41,7 @@ public extension SocketDescriptor {
     
     /// Get Status
     @_alwaysEmitIntoClient
-    func getStatus(retryOnInterrupt: Bool = true) throws -> FileDescriptor.OpenOptions {
+    func getStatus(retryOnInterrupt: Bool = true) throws(Errno) -> FileDescriptor.OpenOptions {
         let rawValue = try _change(
             .getStatusFlags,
             retryOnInterrupt: retryOnInterrupt
@@ -54,7 +54,7 @@ public extension SocketDescriptor {
     func setStatus(
         _ newValue: FileDescriptor.OpenOptions,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         let _ = try _change(
             .setStatusFlags,
             newValue.rawValue,

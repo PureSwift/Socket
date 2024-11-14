@@ -5,7 +5,7 @@
 //  Created by Alsey Coleman Miller on 10/1/22.
 //
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS) || os(Linux)
+#if canImport(Darwin) || os(Linux)
 import Foundation
 import SystemPackage
 @_implementationOnly import CSocket
@@ -15,7 +15,7 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
         
     public typealias ProtocolID = LinkLayerProtocol
     
-    #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+    #if canImport(Darwin)
     /// Index type
     public typealias Index = UInt16
     
@@ -34,7 +34,7 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
     public let address: String
     
     internal init(_ cValue: CSocketAddressType) {
-        #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+        #if canImport(Darwin)
         let index = cValue.sdl_index
         let address = Swift.withUnsafePointer(to: cValue) {
             String(cString: system_link_ntoa($0))
@@ -57,7 +57,7 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
         ) throws -> Result) rethrows -> Result {
         
         var socketAddress = CSocketAddressType()
-        #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+        #if canImport(Darwin)
         socketAddress.sdl_index = index
         self.address.withCString {
             system_link_addr($0, &socketAddress)

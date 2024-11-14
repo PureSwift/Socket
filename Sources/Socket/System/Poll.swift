@@ -57,7 +57,7 @@ extension SocketDescriptor {
         for events: FileEvents,
         timeout: Int = 0,
         retryOnInterrupt: Bool = true
-    ) throws -> FileEvents {
+    ) throws(Errno) -> FileEvents {
         try _poll(
             events: events,
             timeout: CInt(timeout),
@@ -128,7 +128,7 @@ extension Array where Element == SocketDescriptor.Poll {
     public mutating func poll(
         timeout: Int = 0,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         guard isEmpty == false else { return }
         try SocketDescriptor._poll(&self, timeout: CInt(timeout), retryOnInterrupt: retryOnInterrupt).get()
     }

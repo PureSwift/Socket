@@ -5,7 +5,7 @@
 //  Created by Alsey Coleman Miller on 10/1/22.
 //
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS) || os(Linux)
+#if canImport(Darwin) || os(Linux)
 /// Unix Protocol Family
 public enum LinkLayerProtocol: Int32, Codable, SocketProtocol {
     
@@ -13,7 +13,7 @@ public enum LinkLayerProtocol: Int32, Codable, SocketProtocol {
     
     @_alwaysEmitIntoClient
     public static var family: SocketAddressFamily {
-        #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+        #if canImport(Darwin)
         .link
         #elseif os(Linux)
         .packet

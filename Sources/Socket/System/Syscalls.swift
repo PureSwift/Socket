@@ -1,11 +1,21 @@
 import SystemPackage
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 import Darwin
-#elseif os(Linux) || os(FreeBSD) || os(Android)
-import Glibc
 #elseif os(Windows)
+import CSystem
 import ucrt
+#elseif canImport(Glibc)
+@_implementationOnly import CSystem
+import Glibc
+#elseif canImport(Musl)
+@_implementationOnly import CSystem
+import Musl
+#elseif canImport(WASILibc)
+import WASILibc
+#elseif canImport(Bionic)
+@_implementationOnly import CSystem
+import Bionic
 #else
 #error("Unsupported Platform")
 #endif
@@ -74,7 +84,7 @@ internal func _mockInt(
 
 #endif // ENABLE_MOCKING
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 internal var system_errno: CInt {
   get { Darwin.errno }
   set { Darwin.errno = newValue }
@@ -452,7 +462,7 @@ internal func system_freeifaddrs(_ pointer: UnsafeMutablePointer<CInterop.Interf
     return freeifaddrs(pointer)
 }
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 internal func system_link_addr(_ cString: UnsafePointer<CChar>, _ address: UnsafeMutablePointer<sockaddr_dl>) {
 #if ENABLE_MOCKING
     if mockingEnabled { return _mock(cString) }

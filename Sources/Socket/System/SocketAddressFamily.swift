@@ -55,7 +55,7 @@ public extension SocketAddressFamily {
 }
 #endif
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 public extension SocketAddressFamily {
     
     /// NetBIOS protocol

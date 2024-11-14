@@ -16,7 +16,7 @@ extension SocketDescriptor {
     public init<T: SocketProtocol>(
         _ protocolID: T,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         self = try Self._socket(T.family, type: protocolID.type.rawValue, protocol: protocolID.rawValue, retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -37,7 +37,7 @@ extension SocketDescriptor {
         _ protocolID: T,
         flags: SocketFlags,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         self = try Self._socket(T.family, type: protocolID.type.rawValue | flags.rawValue, protocol: protocolID.rawValue, retryOnInterrupt: retryOnInterrupt).get()
     }
     #endif
@@ -70,7 +70,7 @@ extension SocketDescriptor {
         _ protocolID: Address.ProtocolID,
         bind address: Address,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         self = try Self._socket(
             address: address,
             type: protocolID.type.rawValue,
@@ -97,7 +97,7 @@ extension SocketDescriptor {
         bind address: Address,
         flags: SocketFlags,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         self = try Self._socket(
             address: address,
             type: protocolID.type.rawValue | flags.rawValue,
@@ -139,7 +139,7 @@ extension SocketDescriptor {
     public func bind<Address: SocketAddress>(
         _ address: Address,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         try _bind(address, retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -165,21 +165,21 @@ extension SocketDescriptor {
     ///
     /// The method corresponds to the C function `setsockopt`.
     @_alwaysEmitIntoClient
-    public func setSocketOption<T: SocketOption>(
-        _ option: T,
+    public func setSocketOption<Option: SocketOption>(
+        _ option: Option,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         try _setSocketOption(option, retryOnInterrupt: retryOnInterrupt).get()
     }
     
     @usableFromInline
-    internal func _setSocketOption<T: SocketOption>(
-        _ option: T,
+    internal func _setSocketOption<Option: SocketOption>(
+        _ option: Option,
         retryOnInterrupt: Bool
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
             option.withUnsafeBytes { bufferPointer in
-                system_setsockopt(self.rawValue, T.ID.optionLevel.rawValue, T.id.rawValue, bufferPointer.baseAddress!, UInt32(bufferPointer.count))
+                system_setsockopt(self.rawValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, UInt32(bufferPointer.count))
             }
         }
     }
@@ -194,23 +194,29 @@ extension SocketDescriptor {
     ///
     /// The method corresponds to the C function `getsockopt`.
     @_alwaysEmitIntoClient
-    public func getSocketOption<T: SocketOption>(
-        _ option: T.Type,
+    public func getSocketOption<Option: SocketOption>(
+        _ option: Option.Type,
         retryOnInterrupt: Bool = true
-    ) throws -> T {
-        return try _getSocketOption(option, retryOnInterrupt: retryOnInterrupt)
+    ) throws(Errno) -> Option {
+        return try _getSocketOption(option, retryOnInterrupt: retryOnInterrupt).get()
     }
     
     @usableFromInline
-    internal func _getSocketOption<T: SocketOption>(
-        _ option: T.Type,
+    internal func _getSocketOption<Option: SocketOption>(
+        _ option: Option.Type,
         retryOnInterrupt: Bool
-    ) throws -> T {
-        return try T.withUnsafeBytes { bufferPointer in
-            var length = UInt32(bufferPointer.count)
-            guard system_getsockopt(self.rawValue, T.ID.optionLevel.rawValue, T.id.rawValue, bufferPointer.baseAddress!, &length) != -1 else {
-                throw Errno.current
+    ) -> Result<Option, Errno> {
+        do {
+            let value = try Option.withUnsafeBytes { bufferPointer throws(Errno) -> () in
+                var length = UInt32(bufferPointer.count)
+                guard system_getsockopt(self.rawValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, &length) != -1 else {
+                    throw Errno.current
+                }
             }
+            return .success(value)
+        }
+        catch {
+            return .failure(error as! Errno) // TODO: Compiler error?
         }
     }
     
@@ -231,7 +237,7 @@ extension SocketDescriptor {
       _ buffer: UnsafeRawBufferPointer,
       flags: MessageFlags = [],
       retryOnInterrupt: Bool = true
-    ) throws -> Int {
+    ) throws(Errno) -> Int {
       try _send(buffer, flags: flags, retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -252,7 +258,7 @@ extension SocketDescriptor {
         _ data: Data,
         flags: MessageFlags = [],
         retryOnInterrupt: Bool = true
-    ) throws -> Int where Data: Sequence, Data.Element == UInt8 {
+    ) throws(Errno) -> Int where Data: Sequence, Data.Element == UInt8 {
         try data._withRawBufferPointer { dataPointer in
             _send(dataPointer, flags: flags, retryOnInterrupt: retryOnInterrupt)
         }.get()
@@ -288,7 +294,7 @@ extension SocketDescriptor {
         to address: Address,
         flags: MessageFlags = [],
         retryOnInterrupt: Bool = true
-    ) throws -> Int {
+    ) throws(Errno) -> Int {
         try _sendto(buffer, to: address, flags: flags, retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -310,7 +316,7 @@ extension SocketDescriptor {
         to address: Address,
         flags: MessageFlags = [],
         retryOnInterrupt: Bool = true
-    ) throws -> Int where Address: SocketAddress, Data: Sequence, Data.Element == UInt8 {
+    ) throws(Errno) -> Int where Address: SocketAddress, Data: Sequence, Data.Element == UInt8 {
         try data._withRawBufferPointer { dataPointer in
             _sendto(dataPointer, to: address, flags: flags, retryOnInterrupt: retryOnInterrupt)
         }.get()
@@ -348,7 +354,7 @@ extension SocketDescriptor {
       into buffer: UnsafeMutableRawBufferPointer,
       flags: MessageFlags = [],
       retryOnInterrupt: Bool = true
-    ) throws -> Int {
+    ) throws(Errno) -> Int {
       try _receive(
         into: buffer, flags: flags, retryOnInterrupt: retryOnInterrupt
       ).get()
@@ -384,7 +390,7 @@ extension SocketDescriptor {
       fromAddressOf addressType: Address.Type = Address.self,
       flags: MessageFlags = [],
       retryOnInterrupt: Bool = true
-    ) throws -> (Int, Address) {
+    ) throws(Errno) -> (Int, Address) {
       try _receivefrom(
         into: buffer, fromAddressOf: addressType, flags: flags, retryOnInterrupt: retryOnInterrupt
       ).get()
@@ -423,7 +429,7 @@ extension SocketDescriptor {
     public func listen(
         backlog: Int,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         try _listen(backlog: Int32(backlog), retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -452,7 +458,7 @@ extension SocketDescriptor {
     public func accept<Address: SocketAddress>(
         _ address: Address.Type,
         retryOnInterrupt: Bool = true
-    ) throws -> (SocketDescriptor, Address) {
+    ) throws(Errno) -> (SocketDescriptor, Address) {
         return try _accept(address, retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -484,7 +490,7 @@ extension SocketDescriptor {
     @_alwaysEmitIntoClient
     public func accept(
         retryOnInterrupt: Bool = true
-    ) throws -> SocketDescriptor {
+    ) throws(Errno) -> SocketDescriptor {
         return try _accept(retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -513,7 +519,7 @@ extension SocketDescriptor {
     public func connect<Address: SocketAddress>(
         to address: Address,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         try _connect(to: address, retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -538,7 +544,7 @@ extension SocketDescriptor {
     ///
     /// The corresponding C function is `close`.
     @_alwaysEmitIntoClient
-    public func close() throws { try _close().get() }
+    public func close() throws(Errno) { try _close().get() }
 
     @usableFromInline
     internal func _close() -> Result<(), Errno> {
@@ -569,7 +575,7 @@ extension SocketDescriptor {
     public func read(
       into buffer: UnsafeMutableRawBufferPointer,
       retryOnInterrupt: Bool = true
-    ) throws -> Int {
+    ) throws(Errno) -> Int {
       try _read(into: buffer, retryOnInterrupt: retryOnInterrupt).get()
     }
 
@@ -603,7 +609,7 @@ extension SocketDescriptor {
     public func write(
       _ buffer: UnsafeRawBufferPointer,
       retryOnInterrupt: Bool = true
-    ) throws -> Int {
+    ) throws(Errno) -> Int {
       try _write(buffer, retryOnInterrupt: retryOnInterrupt).get()
     }
 
@@ -621,7 +627,7 @@ extension SocketDescriptor {
     public func address<Address: SocketAddress>(
         _ address: Address.Type,
         retryOnInterrupt: Bool = true
-    ) throws -> Address {
+    ) throws(Errno) -> Address {
         return try _getAddress(address, retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -644,7 +650,7 @@ extension SocketDescriptor {
     public func peerAddress<Address: SocketAddress>(
         _ address: Address.Type,
         retryOnInterrupt: Bool = true
-    ) throws -> Address {
+    ) throws(Errno) -> Address {
         return try _getPeerAddress(address, retryOnInterrupt: retryOnInterrupt).get()
     }
     

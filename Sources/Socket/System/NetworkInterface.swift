@@ -78,7 +78,7 @@ public struct NetworkInterfaceID: Equatable, Hashable {
 public extension NetworkInterfaceID {
     
     static var interfaces: [NetworkInterfaceID] {
-        get throws {
+        get throws(Errno) {
             // get null terminated list
             guard let pointer = system_if_nameindex() else {
                 throw Errno.current

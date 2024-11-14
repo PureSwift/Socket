@@ -7,7 +7,7 @@ extension SocketDescriptor {
     public func inputOutput<T: IOControlID>(
         _ request: T,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         try _inputOutput(request, retryOnInterrupt: true).get()
     }
     
@@ -27,7 +27,7 @@ extension SocketDescriptor {
     public func inputOutput<T: IOControlInteger>(
         _ request: T,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         try _inputOutput(request, retryOnInterrupt: retryOnInterrupt).get()
     }
     
@@ -47,7 +47,7 @@ extension SocketDescriptor {
     public func inputOutput<T: IOControlValue>(
         _ request: inout T,
         retryOnInterrupt: Bool = true
-    ) throws {
+    ) throws(Errno) {
         try _inputOutput(&request, retryOnInterrupt: retryOnInterrupt).get()
     }
     

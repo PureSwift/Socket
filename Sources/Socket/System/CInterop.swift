@@ -1,6 +1,6 @@
 import SystemPackage
 
-#if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+#if canImport(Darwin)
 import Darwin
 #elseif os(Linux) || os(FreeBSD) || os(Android)
 import Glibc
@@ -65,7 +65,7 @@ public extension CInterop {
     /// The C `sockaddr_in6` type
     typealias IPv6SocketAddress = sockaddr_in6
     
-    #if os(macOS) || os(iOS) || os(watchOS) || os(tvOS)
+    #if canImport(Darwin)
     /// The C `sockaddr_dl` type
     typealias LinkLayerAddress = sockaddr_dl
     #elseif os(Linux)

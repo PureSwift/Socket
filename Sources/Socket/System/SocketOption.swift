@@ -6,11 +6,11 @@ public protocol SocketOption {
     
     static var id: ID { get }
     
-    func withUnsafeBytes<Result>(_ pointer: ((UnsafeRawBufferPointer) throws -> (Result))) rethrows -> Result
+    func withUnsafeBytes<Result, Error>(_ pointer: ((UnsafeRawBufferPointer) throws(Error) -> (Result))) rethrows -> Result where Error: Swift.Error
     
-    static func withUnsafeBytes(
-        _ body: (UnsafeMutableRawBufferPointer) throws -> ()
-    ) rethrows -> Self
+    static func withUnsafeBytes<Error>(
+        _ body: (UnsafeMutableRawBufferPointer) throws(Error) -> ()
+    ) rethrows -> Self where Error: Swift.Error
 }
 
 public protocol BooleanSocketOption: SocketOption {
@@ -30,13 +30,13 @@ extension BooleanSocketOption where Self: ExpressibleByBooleanLiteral {
 
 public extension BooleanSocketOption {
     
-    func withUnsafeBytes<Result>(_ pointer: ((UnsafeRawBufferPointer) throws -> (Result))) rethrows -> Result {
+    func withUnsafeBytes<Result, Error>(_ pointer: ((UnsafeRawBufferPointer) throws(Error) -> (Result))) rethrows -> Result where Error: Swift.Error {
         return try Swift.withUnsafeBytes(of: boolValue.cInt) { bufferPointer in
             try pointer(bufferPointer)
         }
     }
     
-    static func withUnsafeBytes(_ body: (UnsafeMutableRawBufferPointer) throws -> ()) rethrows -> Self {
+    static func withUnsafeBytes<Error>(_ body: (UnsafeMutableRawBufferPointer) throws(Error) -> ()) rethrows -> Self where Error: Swift.Error {
         var value: CInt = 0
         try Swift.withUnsafeMutableBytes(of: &value, body)
         return Self.init(Bool(value))
