@@ -3,19 +3,18 @@ import SystemPackage
 #if canImport(Darwin)
 import Darwin
 #elseif os(Windows)
-import CSystem
+import CSocket
 import ucrt
 #elseif canImport(Glibc)
-@_implementationOnly import CSystem
 import Glibc
 #elseif canImport(Musl)
-@_implementationOnly import CSystem
+import CSocket
 import Musl
 #elseif canImport(WASILibc)
+import CSocket
 import WASILibc
-#elseif canImport(Bionic)
-@_implementationOnly import CSystem
-import Bionic
+#elseif canImport(Android)
+import Android
 #else
 #error("Unsupported Platform")
 #endif
@@ -367,6 +366,32 @@ internal var _SOL_BLUETOOTH: CInt { SOL_BLUETOOTH }
 
 @_alwaysEmitIntoClient
 internal var _SOL_ALG: CInt { SOL_ALG }
+#endif
+
+@_alwaysEmitIntoClient
+internal var _SOCK_STREAM: CInterop.SocketType { SOCK_STREAM }
+
+@_alwaysEmitIntoClient
+internal var _SOCK_DGRAM: CInterop.SocketType { SOCK_DGRAM }
+
+@_alwaysEmitIntoClient
+internal var _SOCK_RAW: CInterop.SocketType { SOCK_RAW }
+
+@_alwaysEmitIntoClient
+internal var _SOCK_RDM: CInterop.SocketType { SOCK_RDM }
+
+@_alwaysEmitIntoClient
+internal var _SOCK_SEQPACKET: CInterop.SocketType { SOCK_SEQPACKET }
+
+#if os(Linux)
+@_alwaysEmitIntoClient
+internal var _SOCK_DCCP: CInterop.SocketType { SOCK_DCCP }
+
+@_alwaysEmitIntoClient
+internal var _SOCK_NONBLOCK: CInterop.SocketType { SOCK_NONBLOCK }
+
+@_alwaysEmitIntoClient
+internal var _SOCK_CLOEXEC: CInterop.SocketType { SOCK_CLOEXEC }
 #endif
 
 @_alwaysEmitIntoClient

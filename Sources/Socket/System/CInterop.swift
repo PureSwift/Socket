@@ -3,18 +3,18 @@ import SystemPackage
 #if canImport(Darwin)
 import Darwin
 #elseif os(Windows)
-import CSystem
+import CSocket
 import ucrt
 #elseif canImport(Glibc)
-@_implementationOnly import CSystem
+import CSocket
 import Glibc
 #elseif canImport(Musl)
-@_implementationOnly import CSystem
+import CSocket
 import Musl
 #elseif canImport(WASILibc)
 import WASILibc
 #elseif canImport(Bionic)
-@_implementationOnly import CSystem
+import CSocket
 import Bionic
 #else
 #error("Unsupported Platform")
@@ -79,7 +79,7 @@ public extension CInterop {
     typealias LinkLayerAddress = sockaddr_dl
     #elseif os(Linux)
     /// The C `sockaddr_ll` type
-    //typealias LinkLayerAddress = sockaddr_ll
+    typealias LinkLayerAddress = sockaddr_ll
     #endif
     
     /// The C `if_nameindex` type

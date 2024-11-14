@@ -103,7 +103,6 @@ public extension IPv4Address {
 
 extension IPv4Address: RawRepresentable {
     
-    @_alwaysEmitIntoClient
     public init?(rawValue: String) {
         guard let bytes = CInterop.IPv4Address(rawValue) else {
             return nil
@@ -111,7 +110,6 @@ extension IPv4Address: RawRepresentable {
         self.init(bytes)
     }
     
-    @_alwaysEmitIntoClient
     public var rawValue: String {
         return try! String(bytes)
     }
@@ -175,7 +173,6 @@ public extension IPv6Address {
 
 extension IPv6Address: RawRepresentable {
     
-    @_alwaysEmitIntoClient
     public init?(rawValue: String) {
         guard let bytes = CInterop.IPv6Address(rawValue) else {
             return nil
@@ -183,7 +180,6 @@ extension IPv6Address: RawRepresentable {
         self.init(bytes)
     }
     
-    @_alwaysEmitIntoClient
     public var rawValue: String {
         return try! String(bytes)
     }

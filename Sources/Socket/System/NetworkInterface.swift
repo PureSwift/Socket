@@ -6,7 +6,7 @@
 //
 
 import SystemPackage
-@_implementationOnly import CSocket
+import CSocket
 
 /// UNIX Network Interface
 public struct NetworkInterface <Address: SocketAddress>: Identifiable {

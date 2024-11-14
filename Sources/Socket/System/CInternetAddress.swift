@@ -1,6 +1,5 @@
 import SystemPackage
 
-@usableFromInline
 internal protocol CInternetAddress {
     
     static var stringLength: Int { get }
@@ -12,7 +11,6 @@ internal protocol CInternetAddress {
 
 internal extension CInternetAddress {
     
-    @usableFromInline
     init?(_ string: String) {
         self.init()
         /**
@@ -32,7 +30,6 @@ internal extension CInternetAddress {
 
 internal extension String {
     
-    @usableFromInline
     init<T: CInternetAddress>(_ cInternetAddress: T) throws(Errno) {
         let cString = UnsafeMutablePointer<CChar>.allocate(capacity: T.stringLength)
         defer { cString.deallocate() }
@@ -54,18 +51,14 @@ internal extension String {
 
 extension CInterop.IPv4Address: CInternetAddress {
     
-    @usableFromInline
     static var stringLength: Int { return numericCast(_INET_ADDRSTRLEN) }
     
-    @usableFromInline
     static var family: SocketAddressFamily { .ipv4 }
 }
 
 extension CInterop.IPv6Address: CInternetAddress {
     
-    @usableFromInline
     static var stringLength: Int { return numericCast(_INET6_ADDRSTRLEN) }
     
-    @usableFromInline
     static var family: SocketAddressFamily { .ipv6 }
 }

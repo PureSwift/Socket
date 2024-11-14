@@ -1,5 +1,5 @@
 #if os(Linux)
-@_implementationOnly import CSocket
+import CSocket
 
 /// Flags when opening sockets.
 @frozen
@@ -22,10 +22,10 @@ public extension SocketFlags {
     
     /// Set the `O_NONBLOCK` file status flag on the open file description referred to by the new file
     /// descriptor.  Using this flag saves extra calls to `fcntl()` to achieve the same result.
-    static var nonBlocking: SocketFlags { SocketFlags(SOCK_NONBLOCK) }
+    static var nonBlocking: SocketFlags { SocketFlags(_SOCK_NONBLOCK) }
     
     /// Set the close-on-exec (`FD_CLOEXEC`) flag on the new file descriptor.
-    static var closeOnExec: SocketFlags { SocketFlags(SOCK_CLOEXEC) }
+    static var closeOnExec: SocketFlags { SocketFlags(_SOCK_CLOEXEC) }
 }
 
 // @available(macOS 10.16, iOS 14.0, watchOS 7.0, tvOS 14.0, *)

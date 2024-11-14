@@ -8,7 +8,7 @@
 #if canImport(Darwin) || os(Linux)
 import Foundation
 import SystemPackage
-@_implementationOnly import CSocket
+import CSocket
 
 /// Unix Socket Address
 public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
@@ -18,14 +18,12 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
     #if canImport(Darwin)
     /// Index type
     public typealias Index = UInt16
-    
-    internal typealias CSocketAddressType = CInterop.LinkLayerAddress
     #elseif os(Linux)
     /// Index type
     public typealias Index = Int32
-    
-    internal typealias CSocketAddressType = sockaddr_ll
     #endif
+    
+    internal typealias CSocketAddressType = CInterop.LinkLayerAddress
     
     /// Index
     public let index: Index
@@ -86,7 +84,7 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
     }
 }
 
-extension LinkLayerSocketAddress.CSocketAddressType: CSocketAddress {
+extension CInterop.LinkLayerAddress: CSocketAddress {
     
     @_alwaysEmitIntoClient
     static var family: SocketAddressFamily { LinkLayerProtocol.family }
