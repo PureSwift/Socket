@@ -211,9 +211,12 @@ private extension AsyncSocketManager {
             else { return }
         log("Will start monitoring")
         state.isMonitoring = true
+
         // Create top level task to monitor
-        Task.detached(priority: state.configuration.monitorPriority) { [unowned self] in
-            await self.run()
+        // MEMO: Using [weak self] instead of [unowned self] to work around a compiler bug.
+        // This issue only occurs in CI environments, where using [unowned self] causes a compiler crash under certain conditions.
+        Task.detached(priority: state.configuration.monitorPriority) { [weak self] in
+            await self?.run()
         }
     }
     
