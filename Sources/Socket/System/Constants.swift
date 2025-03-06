@@ -6,6 +6,7 @@ import Darwin
 import CSocket
 import ucrt
 #elseif canImport(Glibc)
+import CSocket
 import Glibc
 #elseif canImport(Musl)
 import CSocket
@@ -14,6 +15,7 @@ import Musl
 import CSocket
 import WASILibc
 #elseif canImport(Android)
+import CSocket
 import Android
 #else
 #error("Unsupported Platform")
