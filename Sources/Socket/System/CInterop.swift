@@ -89,4 +89,10 @@ public extension CInterop {
     
     /// The C  `ifaddrs` type
     typealias InterfaceLinkedList = ifaddrs
+    
+    #if os(Android)
+    typealias IOControlID = Int32
+    #else
+    typealias IOControlID = CUnsignedLong
+    #endif
 }

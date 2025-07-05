@@ -2,10 +2,10 @@
 public protocol IOControlID: RawRepresentable {
     
     /// Create a strongly-typed I/O request from a raw C IO request.
-    init?(rawValue: CUnsignedLong)
+    init?(rawValue: CInterop.IOControlID)
     
     /// The raw C IO request ID.
-    var rawValue: CUnsignedLong { get }
+    var rawValue: CInterop.IOControlID { get }
 }
 
 public protocol IOControlInteger {
