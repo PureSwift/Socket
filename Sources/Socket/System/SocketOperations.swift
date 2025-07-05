@@ -271,7 +271,7 @@ extension SocketDescriptor {
       retryOnInterrupt: Bool
     ) -> Result<Int, Errno> {
       valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-        system_send(self.rawValue, buffer.baseAddress, buffer.count, flags.rawValue)
+        system_send(self.rawValue, buffer.baseAddress!, buffer.count, flags.rawValue)
       }
     }
     
@@ -332,7 +332,7 @@ extension SocketDescriptor {
     ) -> Result<Int, Errno> {
         valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
             address.withUnsafePointer { (addressPointer, addressLength) in
-                system_sendto(self.rawValue, data.baseAddress, data.count, flags.rawValue, addressPointer, addressLength)
+                system_sendto(self.rawValue, data.baseAddress!, data.count, flags.rawValue, addressPointer, addressLength)
             }
         }
     }

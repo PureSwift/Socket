@@ -5,6 +5,7 @@
 //  Created by Alsey Coleman Miller on 4/26/22.
 //
 
+#if !os(Android)
 import SystemPackage
 
 /// Unix Socket Address
@@ -63,3 +64,4 @@ extension CInterop.UnixSocketAddress: CSocketAddress {
     @_alwaysEmitIntoClient
     static var family: SocketAddressFamily { .unix }
 }
+#endif

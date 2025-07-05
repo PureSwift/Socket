@@ -65,8 +65,10 @@ public extension CInterop {
     /// The C `sockaddr_in` type
     typealias SocketAddress = sockaddr
     
+    #if !os(Android)
     /// The C `sockaddr_in` type
     typealias UnixSocketAddress = sockaddr_un
+    #endif
   
     /// The C `sockaddr_in` type
     typealias IPv4SocketAddress = sockaddr_in

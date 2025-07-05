@@ -166,11 +166,16 @@ internal var _INET_ADDRSTRLEN: CInt { INET_ADDRSTRLEN }
 @_alwaysEmitIntoClient
 internal var _INET6_ADDRSTRLEN: CInt { INET6_ADDRSTRLEN }
 
+#if os(Android)
 @_alwaysEmitIntoClient
-internal var _INADDR_ANY: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: INADDR_ANY) }
+internal var _INADDR_ANY: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: 0x00000000) }
+#else
+@_alwaysEmitIntoClient
+internal var _INADDR_ANY: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: numericCast(INADDR_ANY)) }
+#endif
 
 @_alwaysEmitIntoClient
-internal var _INADDR_LOOPBACK: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: INADDR_LOOPBACK) }
+internal var _INADDR_LOOPBACK: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: numericCast(INADDR_LOOPBACK)) }
 
 @_alwaysEmitIntoClient
 internal var _INADDR6_ANY: CInterop.IPv6Address { in6addr_any }

@@ -13,9 +13,9 @@ import CSocket
 import Musl
 #elseif canImport(WASILibc)
 import WASILibc
-#elseif canImport(Bionic)
-import CSocket
-import Bionic
+#elseif canImport(Android)
+import CSystem
+import Android
 #else
 #error("Unsupported Platform")
 #endif
@@ -101,10 +101,25 @@ internal var system_errno: CInt {
     _ = ucrt._set_errno(newValue)
   }
 }
-#else
+#elseif canImport(Glibc)
 internal var system_errno: CInt {
   get { Glibc.errno }
   set { Glibc.errno = newValue }
+}
+#elseif canImport(Musl)
+internal var system_errno: CInt {
+  get { Musl.errno }
+  set { Musl.errno = newValue }
+}
+#elseif canImport(WASILibc)
+internal var system_errno: CInt {
+  get { WASILibc.errno }
+  set { WASILibc.errno = newValue }
+}
+#elseif canImport(Android)
+internal var system_errno: CInt {
+  get { Android.errno }
+  set { Android.errno = newValue }
 }
 #endif
 
@@ -172,7 +187,7 @@ internal func system_getsockopt(
   _ level: CInt,
   _ option: CInt,
   _ value: UnsafeMutableRawPointer?,
-  _ length: UnsafeMutablePointer<UInt32>?
+  _ length: UnsafeMutablePointer<UInt32>
 ) -> CInt {
   #if ENABLE_MOCKING
   if mockingEnabled { return _mock(socket, level, option, value, length) }
@@ -193,7 +208,7 @@ internal func system_bind(
 
 internal func system_connect(
   _ socket: CInt,
-  _ addr: UnsafePointer<sockaddr>?,
+  _ addr: UnsafePointer<sockaddr>,
   _ len: socklen_t
 ) -> CInt {
   #if ENABLE_MOCKING
@@ -217,7 +232,7 @@ internal func system_getaddrinfo(
   _ hostname: UnsafePointer<CChar>?,
   _ servname: UnsafePointer<CChar>?,
   _ hints: UnsafePointer<CInterop.AddressInfo>?,
-  _ res: UnsafeMutablePointer<UnsafeMutablePointer<CInterop.AddressInfo>?>?
+  _ res: UnsafeMutablePointer<UnsafeMutablePointer<CInterop.AddressInfo>?>
 ) -> CInt {
   #if ENABLE_MOCKING
   if mockingEnabled {
@@ -230,12 +245,12 @@ internal func system_getaddrinfo(
 }
 
 internal func system_getnameinfo(
-  _ sa: UnsafePointer<CInterop.SocketAddress>?,
+  _ sa: UnsafePointer<CInterop.SocketAddress>,
   _ salen: UInt32,
   _ host: UnsafeMutablePointer<CChar>?,
-  _ hostlen: UInt32,
+  _ hostlen: socklen_t,
   _ serv: UnsafeMutablePointer<CChar>?,
-  _ servlen: UInt32,
+  _ servlen: socklen_t,
   _ flags: CInt
 ) -> CInt {
   #if ENABLE_MOCKING
@@ -243,7 +258,7 @@ internal func system_getnameinfo(
     return _mock(sa, salen, host, hostlen, serv, servlen, flags)
   }
   #endif
-  return getnameinfo(sa, salen, host, hostlen, serv, servlen, flags)
+  return getnameinfo(sa, salen, host, numericCast(hostlen), serv, numericCast(servlen), flags)
 }
 
 internal func system_freeaddrinfo(
@@ -280,7 +295,10 @@ internal func system_listen(_ socket: CInt, _ backlog: CInt) -> CInt {
 }
 
 internal func system_send(
-  _ socket: Int32, _ buffer: UnsafeRawPointer?, _ len: Int, _ flags: Int32
+  _ socket: Int32, 
+  _ buffer: UnsafeRawPointer,
+  _ len: Int,
+  _ flags: Int32
 ) -> Int {
   #if ENABLE_MOCKING
   if mockingEnabled { return _mockInt(socket, buffer, len, flags) }
@@ -302,7 +320,7 @@ internal func system_recv(
 
 internal func system_sendto(
   _ socket: CInt,
-  _ buffer: UnsafeRawPointer?,
+  _ buffer: UnsafeRawPointer,
   _ length: Int,
   _ flags: CInt,
   _ dest_addr: UnsafePointer<CInterop.SocketAddress>?,
@@ -345,7 +363,7 @@ internal func system_poll(
 
 internal func system_sendmsg(
   _ socket: CInt,
-  _ message: UnsafePointer<CInterop.MessageHeader>?,
+  _ message: UnsafePointer<CInterop.MessageHeader>,
   _ flags: CInt
 ) -> Int {
   #if ENABLE_MOCKING
@@ -356,7 +374,7 @@ internal func system_sendmsg(
 
 internal func system_recvmsg(
   _ socket: CInt,
-  _ message: UnsafeMutablePointer<CInterop.MessageHeader>?,
+  _ message: UnsafeMutablePointer<CInterop.MessageHeader>,
   _ flags: CInt
 ) -> Int {
   #if ENABLE_MOCKING
@@ -372,7 +390,7 @@ internal func system_fcntl(
 #if ENABLE_MOCKING
   if mockingEnabled { return _mock(fd, cmd) }
 #endif
-  return fcntl(fd, cmd)
+  return _fcntl(fd, cmd)
 }
 
 internal func system_fcntl(
@@ -383,7 +401,7 @@ internal func system_fcntl(
 #if ENABLE_MOCKING
   if mockingEnabled { return _mock(fd, cmd, value) }
 #endif
-  return fcntl(fd, cmd, value)
+  return _fcntl(fd, cmd, value)
 }
 
 internal func system_fcntl(
@@ -394,42 +412,42 @@ internal func system_fcntl(
 #if ENABLE_MOCKING
   if mockingEnabled { return _mock(fd, cmd, pointer) }
 #endif
-  return fcntl(fd, cmd, pointer)
+  return _fcntl(fd, cmd, pointer)
 }
 
 // ioctl
 internal func system_ioctl(
   _ fd: Int32,
-  _ request: CUnsignedLong
+  _ request: CInterop.IOControlID
 ) -> CInt {
 #if ENABLE_MOCKING
   if mockingEnabled { return _mock(fd, request) }
 #endif
-  return ioctl(fd, request)
+  return _ioctl(fd, request)
 }
 
 // ioctl
 internal func system_ioctl(
   _ fd: Int32,
-  _ request: CUnsignedLong,
+  _ request: CInterop.IOControlID,
   _ value: CInt
 ) -> CInt {
 #if ENABLE_MOCKING
   if mockingEnabled { return _mock(fd, request, value) }
 #endif
-  return ioctl(fd, request, value)
+  return _ioctl(fd, request, value)
 }
 
 // ioctl
 internal func system_ioctl(
   _ fd: Int32,
-  _ request: CUnsignedLong,
+  _ request: CInterop.IOControlID,
   _ pointer: UnsafeMutableRawPointer
 ) -> CInt {
 #if ENABLE_MOCKING
   if mockingEnabled { return _mock(fd, request, pointer) }
 #endif
-  return ioctl(fd, request, pointer)
+  return _ioctl(fd, request, pointer)
 }
 
 // if_nameindex
@@ -491,3 +509,47 @@ internal func system_getpeername(_ fd: CInt, _ address: UnsafeMutablePointer<CIn
 #endif
     return getpeername(fd, address, length)
 }
+
+#if os(Android)
+@_silgen_name("fcntl")
+func _fcntl(_ fd: Int32, _ cmd: CInterop.IOControlID) -> Int32
+
+@_silgen_name("fcntl")
+func _fcntl(_ fd: Int32, _ cmd: CInterop.IOControlID, _ value: Int32) -> Int32
+
+@_silgen_name("fcntl")
+func _fcntl(_ fd: Int32, _ cmd: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> Int32
+
+@_silgen_name("ioctl")
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID, _ value: CInt) -> CInt
+
+@_silgen_name("ioctl")
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> CInt
+
+@_silgen_name("ioctl")
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID) -> CInt
+#else
+func _fcntl(_ fd: Int32, _ cmd: Int32) -> Int32 {
+    fcntl(fd, cmd)
+}
+
+func _fcntl(_ fd: Int32, _ cmd: Int32, _ value: Int32) -> Int32 {
+    fcntl(fd, cmd, value)
+}
+
+func _fcntl(_ fd: Int32, _ cmd: Int32, _ ptr: UnsafeMutableRawPointer) -> Int32 {
+    fcntl(fd, cmd, ptr)
+}
+
+func _ioctl(_ fd: CInt, _ request: UInt, _ value: CInt) -> CInt {
+    ioctl(fd, request, value)
+}
+
+func _ioctl(_ fd: CInt, _ request: UInt, _ ptr: UnsafeMutableRawPointer) -> CInt {
+    ioctl(fd, request, ptr)
+}
+
+func _ioctl(_ fd: CInt, _ request: UInt) -> CInt {
+    ioctl(fd, request)
+}
+#endif

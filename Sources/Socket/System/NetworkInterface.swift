@@ -45,16 +45,26 @@ public extension NetworkInterface {
             while let value = linkedListItem?.pointee {
                 // next item in linked list
                 defer { linkedListItem = linkedListItem?.pointee.ifa_next }
-                let interfaceName = String(cString: .init(value.ifa_name))
+                let interfaceName = String(cString: unsafeBitCast(value.ifa_name, to: UnsafePointer<Int8>.self))
                 guard let id = interfaceIDs.first(where: { $0.name == interfaceName }) else {
                     assertionFailure("Unknown interface \(interfaceName)")
                     continue
                 }
-                guard Address.family.rawValue == value.ifa_addr.pointee.sa_family else {
+                #if os(Android)
+                guard let sa_family = value.ifa_addr?.pointee.sa_family else {
+                    continue
+                }
+                #else
+                let sa_family = value.ifa_addr.pointee.sa_family
+                #endif
+                guard Address.family.rawValue == sa_family else {
                     continue // incompatible address type
                 }
-                let address = Address.withUnsafePointer(value.ifa_addr)
-                let netmask = value.ifa_netmask == nil ? nil : Address.withUnsafePointer(value.ifa_netmask)
+                let address = value.ifa_addr.flatMap { Address.withUnsafePointer($0) }
+                let netmask = value.ifa_netmask.flatMap { Address.withUnsafePointer($0) }
+                guard let address, let netmask else {
+                    continue
+                }
                 let interface = Self.init(
                     id: id,
                     flags: value.ifa_flags,
@@ -103,6 +113,7 @@ internal extension NetworkInterfaceID {
     
     init(_ cValue: CInterop.InterfaceNameIndex) {
         self.index = cValue.if_index
-        self.name = String(cString: cValue.if_name)
+        let if_name: UnsafeMutablePointer<CChar>? = cValue.if_name
+        self.name = if_name.flatMap({ String(cString: $0) }) ?? ""
     }
 }
