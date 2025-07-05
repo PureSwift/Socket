@@ -511,23 +511,48 @@ internal func system_getpeername(_ fd: CInt, _ address: UnsafeMutablePointer<CIn
 }
 
 #if os(Android)
-@_silgen_name("fcntl")
-func _fcntl(_ fd: Int32, _ cmd: CInterop.IOControlID) -> Int32
+func _fcntl(_ fd: Int32, _ cmd: Int32) -> Int32 {
+    android_fcntl(fd, cmd)
+}
 
-@_silgen_name("fcntl")
-func _fcntl(_ fd: Int32, _ cmd: CInterop.IOControlID, _ value: Int32) -> Int32
+func _fcntl(_ fd: Int32, _ cmd: Int32, _ value: Int32) -> Int32 {
+    android_fcntl_value(fd, cmd, value)
+}
 
-@_silgen_name("fcntl")
-func _fcntl(_ fd: Int32, _ cmd: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> Int32
+func _fcntl(_ fd: Int32, _ cmd: Int32, _ ptr: UnsafeMutableRawPointer) -> Int32 {
+    android_fcntl_ptr(fd, cmd, ptr)
+}
 
-@_silgen_name("ioctl")
-func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID, _ value: CInt) -> CInt
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID, _ value: CInt) -> CInt {
+    android_ioctl_value(fd, request, value)
+}
 
-@_silgen_name("ioctl")
-func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> CInt
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> CInt {
+    android_ioctl_ptr(fd, request, ptr)
+}
 
-@_silgen_name("ioctl")
-func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID) -> CInt
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID) -> CInt {
+    android_ioctl(fd, request)
+}
+
+@_silgen_name("android_fcntl")
+func android_fcntl(_ fd: Int32, _ cmd: CInterop.IOControlID) -> Int32
+
+@_silgen_name("android_fcntl_value")
+func android_fcntl_value(_ fd: Int32, _ cmd: CInterop.IOControlID, _ value: Int32) -> Int32
+
+@_silgen_name("android_fcntl_ptr")
+func android_fcntl_ptr(_ fd: Int32, _ cmd: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> Int32
+
+@_silgen_name("android_ioctl_value")
+func android_ioctl_value(_ fd: CInt, _ request: CInterop.IOControlID, _ value: CInt) -> CInt
+
+@_silgen_name("android_ioctl_ptr")
+func android_ioctl_ptr(_ fd: CInt, _ request: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> CInt
+
+@_silgen_name("android_ioctl")
+func android_ioctl(_ fd: CInt, _ request: CInterop.IOControlID) -> CInt
+
 #else
 func _fcntl(_ fd: Int32, _ cmd: Int32) -> Int32 {
     fcntl(fd, cmd)
@@ -541,15 +566,15 @@ func _fcntl(_ fd: Int32, _ cmd: Int32, _ ptr: UnsafeMutableRawPointer) -> Int32 
     fcntl(fd, cmd, ptr)
 }
 
-func _ioctl(_ fd: CInt, _ request: UInt, _ value: CInt) -> CInt {
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID, _ value: CInt) -> CInt {
     ioctl(fd, request, value)
 }
 
-func _ioctl(_ fd: CInt, _ request: UInt, _ ptr: UnsafeMutableRawPointer) -> CInt {
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> CInt {
     ioctl(fd, request, ptr)
 }
 
-func _ioctl(_ fd: CInt, _ request: UInt) -> CInt {
+func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID) -> CInt {
     ioctl(fd, request)
 }
 #endif
