@@ -5,7 +5,7 @@
 //  Created by Alsey Coleman Miller on 7/5/25.
 //
 
-#ifdef __BIONIC__
+#ifdef __ANDROID__
 
 #include "CSystemAndroid.h"
 #include <sys/socket.h>
@@ -13,6 +13,8 @@
 #include <sys/timerfd.h>
 #include <sys/types.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
 
 extern int android_fcntl(int fd, int cmd)
 {
@@ -31,17 +33,17 @@ extern int android_fcntl_ptr(int fd, int cmd, void* ptr)
 
 extern int android_ioctl(int fd, unsigned long op)
 {
-    return ioctl(fd, cmd);
+    return ioctl(fd, op);
 }
 
 extern int android_ioctl_value(int fd, unsigned long op, int value)
 {
-    return ioctl(fd, cmd, value);
+    return ioctl(fd, op, value);
 }
 
 extern int android_ioctl_ptr(int fd, unsigned long op, void* ptr)
 {
-    return ioctl(fd, cmd, ptr);
+    return ioctl(fd, op, ptr);
 }
 
 #endif
