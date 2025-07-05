@@ -2,5 +2,6 @@ module CSocket {
   header "CSystemLinux.h"
   header "CSystemWASI.h"
   header "CSystemWindows.h"
+  header "CSystemAndroid.h"
   export *
 }
