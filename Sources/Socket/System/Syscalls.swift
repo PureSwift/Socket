@@ -536,13 +536,13 @@ func _ioctl(_ fd: CInt, _ request: CInterop.IOControlID) -> CInt {
 }
 
 @_silgen_name("android_fcntl")
-func android_fcntl(_ fd: Int32, _ cmd: CInterop.IOControlID) -> Int32
+func android_fcntl(_ fd: Int32, _ cmd: Int32) -> Int32
 
 @_silgen_name("android_fcntl_value")
-func android_fcntl_value(_ fd: Int32, _ cmd: CInterop.IOControlID, _ value: Int32) -> Int32
+func android_fcntl_value(_ fd: Int32, _ cmd: Int32, _ value: Int32) -> Int32
 
 @_silgen_name("android_fcntl_ptr")
-func android_fcntl_ptr(_ fd: Int32, _ cmd: CInterop.IOControlID, _ ptr: UnsafeMutableRawPointer) -> Int32
+func android_fcntl_ptr(_ fd: Int32, _ cmd: Int32, _ ptr: UnsafeMutableRawPointer) -> Int32
 
 @_silgen_name("android_ioctl_value")
 func android_ioctl_value(_ fd: CInt, _ request: CInterop.IOControlID, _ value: CInt) -> CInt
