@@ -5,12 +5,14 @@ import Darwin
 #elseif os(Windows)
 import ucrt
 #elseif canImport(Glibc)
+import CSocket
 import Glibc
 #elseif canImport(Musl)
 import Musl
 #elseif canImport(WASILibc)
 import WASILibc
 #elseif canImport(Android)
+import CSocket
 import Android
 #else
 #error("Unsupported Platform")

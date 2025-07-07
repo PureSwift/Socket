@@ -12,6 +12,7 @@ import Glibc
 import CSocket
 import Musl
 #elseif canImport(WASILibc)
+import CSocket
 import WASILibc
 #elseif canImport(Android)
 import CSystem
