@@ -1,17 +1,14 @@
 import SystemPackage
-
+import CSocket
 #if canImport(Darwin)
 import Darwin
 #elseif os(Windows)
-import CSocket
 import ucrt
 #elseif canImport(Glibc)
 import Glibc
 #elseif canImport(Musl)
-import CSocket
 import Musl
 #elseif canImport(WASILibc)
-import CSocket
 import WASILibc
 #elseif canImport(Android)
 import Android
