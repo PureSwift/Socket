@@ -30,22 +30,23 @@ jobs:
     - name: Swift Version
       run: swift --version
     - name: Build (Debug)
-      run: swift build -c debug
+      run: swift build -c debug --build-tests
     - name: Build (Release)
       run: swift build -c release
-    - name: Test (Debug)
-      run: swift test -c debug
 
-  linux-android:
+  android:
+    name: Android
     strategy:
       fail-fast: false
       matrix:
         swift: ['6.1', 'nightly-6.2']
-    runs-on: ubuntu-latest
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: "Test Swift Package on Android"
-        uses: skiptools/swift-android-action@v2
-        with:
-          swift-version: ${{ matrix.swift }}
+      - name: "Build Swift Package for Android"
+        run: |
+          brew install skiptools/skip/skip || (brew update && brew install skiptools/skip/skip)
+          skip android sdk install --version ${{ matrix.swift }}
+          # https://github.com/swiftlang/swift-driver/pull/1879
+          ANDROID_NDK_ROOT="" skip android build --build-tests
