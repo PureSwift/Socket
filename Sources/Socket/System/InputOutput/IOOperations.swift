@@ -1,5 +1,8 @@
 import SystemPackage
 
+#if os(Windows)
+// TODO: Windows specific APIs
+#else
 extension SocketDescriptor {
     
     /// Manipulates the underlying device parameters of special files.
@@ -64,3 +67,4 @@ extension SocketDescriptor {
         }
     }
 }
+#endif

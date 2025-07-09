@@ -1,5 +1,6 @@
 import SystemPackage
 
+#if !os(Windows)
 public extension SocketDescriptor {
     
     /// Duplicate
@@ -136,3 +137,4 @@ internal extension FileChangeID {
     @_alwaysEmitIntoClient
     static var setStatusFlags: FileChangeID { FileChangeID(_F_SETFL) }
 }
+#endif

@@ -383,6 +383,7 @@ internal func system_recvmsg(
   return recvmsg(socket, message, flags)
 }
 
+#if !os(Windows)
 internal func system_fcntl(
   _ fd: Int32,
   _ cmd: Int32
@@ -479,6 +480,7 @@ internal func system_freeifaddrs(_ pointer: UnsafeMutablePointer<CInterop.Interf
 #endif
     return freeifaddrs(pointer)
 }
+#endif
 
 #if canImport(Darwin)
 internal func system_link_addr(_ cString: UnsafePointer<CChar>, _ address: UnsafeMutablePointer<sockaddr_dl>) {
@@ -553,7 +555,7 @@ func android_ioctl_ptr(_ fd: CInt, _ request: CInterop.IOControlID, _ ptr: Unsaf
 @_silgen_name("android_ioctl")
 func android_ioctl(_ fd: CInt, _ request: CInterop.IOControlID) -> CInt
 
-#else
+#elseif !os(Windows)
 func _fcntl(_ fd: Int32, _ cmd: Int32) -> Int32 {
     fcntl(fd, cmd)
 }
