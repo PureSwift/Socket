@@ -24,7 +24,7 @@ var package = Package(
     dependencies: [
         .package(
             url: "https://github.com/apple/swift-system",
-            from: "1.4.0"
+            from: "1.5.0"
         )
     ],
     targets: [
