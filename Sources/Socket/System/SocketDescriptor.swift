@@ -12,20 +12,11 @@ import SystemPackage
 /// Same as ``FileDescriptor`` on POSIX and opaque type on Windows.
 public struct SocketDescriptor: RawRepresentable, Equatable, Hashable, Sendable {
     
-    #if os(Windows)
-    #error("Implement Windows support")
-    /// Native Windows Socket handle
-    ///
-    /// https://docs.microsoft.com/en-us/windows/win32/api/winsock2/
-    public typealias RawValue = CInterop.WinSock
-    #else
-    /// Native POSIX Socket handle
-    public typealias RawValue = FileDescriptor.RawValue
-    #endif
+    public typealias RawValue = CInterop.SocketDescriptor
+    
+    public let rawValue: RawValue
     
     public init(rawValue: RawValue) {
         self.rawValue = rawValue
     }
-    
-    public let rawValue: RawValue
 }

@@ -33,7 +33,9 @@ public extension CInterop {
     typealias FileEvent = Int16
     
     #if os(Windows)
-    /// The platform socket descriptor.
+    /// Native Windows Socket handle
+    ///
+    /// https://docs.microsoft.com/en-us/windows/win32/api/winsock2/
     typealias SocketDescriptor = SOCKET
     #else
     /// The platform socket descriptor, which is the same as a file desciptor on Unix systems.
