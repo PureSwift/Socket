@@ -387,7 +387,7 @@ internal var _SOCK_RDM: CInterop.SocketType { SOCK_RDM }
 @_alwaysEmitIntoClient
 internal var _SOCK_SEQPACKET: CInterop.SocketType { SOCK_SEQPACKET }
 
-#if os(Linux)
+#if os(Linux) || os(Android)
 @_alwaysEmitIntoClient
 internal var _SOCK_DCCP: CInterop.SocketType { SOCK_DCCP }
 
@@ -454,13 +454,13 @@ internal var _MSG_MORE: CInt { numericCast(MSG_MORE) }
 
 #if os(Linux) || os(Android)
 @_alwaysEmitIntoClient
-internal var _EFD_CLOEXEC: Int { EFD_CLOEXEC }
+internal var _EFD_CLOEXEC: CInt { numericCast(EFD_CLOEXEC) }
 
 @_alwaysEmitIntoClient
-internal var _EFD_NONBLOCK: Int { EFD_NONBLOCK }
+internal var _EFD_NONBLOCK: CInt { numericCast(EFD_NONBLOCK) }
 
 @_alwaysEmitIntoClient
-internal var _EFD_SEMAPHORE: Int { EFD_SEMAPHORE }
+internal var _EFD_SEMAPHORE: CInt { numericCast(EFD_SEMAPHORE) }
 #endif
 
 @_alwaysEmitIntoClient

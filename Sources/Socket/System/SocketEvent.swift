@@ -36,8 +36,8 @@ public extension SocketDescriptor.Event {
         public init(rawValue: CInt) { self.rawValue = rawValue }
 
         @_alwaysEmitIntoClient
-        private init(_ cValue: Int) {
-            self.init(rawValue: numericCast(cValue))
+        private init(_ raw: CInt) {
+            self.init(rawValue: raw)
         }
     }
 }
