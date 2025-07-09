@@ -452,6 +452,17 @@ internal var _MSG_CONFIRM: CInt { numericCast(MSG_CONFIRM) }
 internal var _MSG_MORE: CInt { numericCast(MSG_MORE) }
 #endif
 
+#if os(Linux) || os(Android)
+@_alwaysEmitIntoClient
+internal var _EFD_CLOEXEC: Int { EFD_CLOEXEC }
+
+@_alwaysEmitIntoClient
+internal var _EFD_NONBLOCK: Int { EFD_NONBLOCK }
+
+@_alwaysEmitIntoClient
+internal var _EFD_SEMAPHORE: Int { EFD_SEMAPHORE }
+#endif
+
 @_alwaysEmitIntoClient
 internal var _fd_set_count: Int {
 #if canImport(Darwin)
