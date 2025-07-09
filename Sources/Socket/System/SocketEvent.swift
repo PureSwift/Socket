@@ -84,7 +84,7 @@ public extension SocketDescriptor.Event {
     @frozen
     struct Counter: RawRepresentable, Equatable, Hashable, Sendable {
         
-        public typealias RawValue = CUnsignedInt
+        public typealias RawValue = UInt64
         
         @_alwaysEmitIntoClient
         public var rawValue: RawValue
@@ -114,6 +114,8 @@ extension SocketDescriptor.Event.Counter: CustomStringConvertible, CustomDebugSt
 
 extension SocketDescriptor.Event {
     
+    internal var fileDescriptor: SocketDescriptor { .init(rawValue: rawValue) }
+    
     /**
      `eventfd()` creates an "eventfd object" that can be used as an event wait/notify mechanism by user-space applications, and by the kernel to notify user-space applications of events.
      The object contains an unsigned 64-bit integer (uint64_t) counter that is maintained by the kernel.
@@ -121,8 +123,8 @@ extension SocketDescriptor.Event {
      */
     @usableFromInline
     internal static func _events(
-        _ counter: SocketDescriptor.Event.Counter,
-        _ flags: SocketDescriptor.Event.Flags,
+        _ counter: CUnsignedInt,
+        flags: SocketDescriptor.Event.Flags,
         retryOnInterrupt: Bool
     ) -> Result<SocketDescriptor.Event, Errno> {
         valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
@@ -132,11 +134,11 @@ extension SocketDescriptor.Event {
     
     @_alwaysEmitIntoClient
     public init(
-        _ counter: SocketDescriptor.Event.Counter = 0,
-        _ flags: SocketDescriptor.Event.Flags = [],
+        _ counter: CUnsignedInt = 0,
+        flags: SocketDescriptor.Event.Flags = [],
         retryOnInterrupt: Bool = true
     ) throws(Errno) {
-        self = try Self._events(counter, flags, retryOnInterrupt: retryOnInterrupt).get()
+        self = try Self._events(counter.rawValue, flags: flags, retryOnInterrupt: retryOnInterrupt).get()
     }
     
     /// Deletes a file descriptor.
@@ -151,7 +153,7 @@ extension SocketDescriptor.Event {
 
     @usableFromInline
     internal func _close() -> Result<(), Errno> {
-      nothingOrErrno(retryOnInterrupt: false) { system_close(self.rawValue) }
+        fileDescriptor._close()
     }
 
     @usableFromInline
@@ -159,10 +161,8 @@ extension SocketDescriptor.Event {
       retryOnInterrupt: Bool
     ) -> Result<Counter, Errno> {
         var counter = Counter()
-        return withUnsafeMutableBytes(of: &counter.rawValue) { buffer in
-            valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-                system_read(self.rawValue, buffer.baseAddress, buffer.count)
-            }
+        return withUnsafeMutableBytes(of: &counter.rawValue) {
+            fileDescriptor._read(into: $0, retryOnInterrupt: retryOnInterrupt)
         }.map { assert($0 == 8) }.map { _ in counter }
     }
     
@@ -181,6 +181,38 @@ extension SocketDescriptor.Event {
       retryOnInterrupt: Bool = true
     ) throws(Errno) -> Counter {
       try _read(retryOnInterrupt: retryOnInterrupt).get()
+    }
+    
+    /**
+     A write(2) call adds the 8-byte integer value supplied in
+         its buffer to the counter.  The maximum value that may be
+         stored in the counter is the largest unsigned 64-bit value
+         minus 1 (i.e., 0xfffffffffffffffe).  If the addition would
+         cause the counter's value to exceed the maximum, then the
+         write(2) either blocks until a read(2) is performed on the
+         file descriptor, or fails with the error EAGAIN if the file
+         descriptor has been made nonblocking.
+
+         A write(2) fails with the error EINVAL if the size of the
+         supplied buffer is less than 8 bytes, or if an attempt is
+         made to write the value 0xffffffffffffffff.
+     */
+    @_alwaysEmitIntoClient
+    public func write(
+      _ counter: Counter,
+      retryOnInterrupt: Bool = true
+    ) throws(Errno) -> Int {
+      try _write(buffer, retryOnInterrupt: retryOnInterrupt).get()
+    }
+    
+    @usableFromInline
+    internal func _write(
+      _ counter: Counter,
+      retryOnInterrupt: Bool
+    ) -> Result<(), Errno> {
+        return withUnsafeBytes(of: counter.rawValue) {
+            fileDescriptor._write($0, retryOnInterrupt: retryOnInterrupt)
+        }.map { assert($0 == 8) }
     }
 }
 #endif
