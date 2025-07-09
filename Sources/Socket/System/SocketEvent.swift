@@ -128,7 +128,7 @@ extension SocketDescriptor.Event {
         retryOnInterrupt: Bool
     ) -> Result<SocketDescriptor.Event, Errno> {
         valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
-            system_eventfd(counter.rawValue, flags.rawValue)
+            system_eventfd(counter, flags.rawValue)
         }.map({ SocketDescriptor.Event(rawValue: $0) })
     }
     
@@ -138,7 +138,7 @@ extension SocketDescriptor.Event {
         flags: SocketDescriptor.Event.Flags = [],
         retryOnInterrupt: Bool = true
     ) throws(Errno) {
-        self = try Self._events(counter.rawValue, flags: flags, retryOnInterrupt: retryOnInterrupt).get()
+        self = try Self._events(counter, flags: flags, retryOnInterrupt: retryOnInterrupt).get()
     }
     
     /// Deletes a file descriptor.
@@ -201,8 +201,8 @@ extension SocketDescriptor.Event {
     public func write(
       _ counter: Counter,
       retryOnInterrupt: Bool = true
-    ) throws(Errno) -> Int {
-      try _write(buffer, retryOnInterrupt: retryOnInterrupt).get()
+    ) throws(Errno) {
+      try _write(counter, retryOnInterrupt: retryOnInterrupt).get()
     }
     
     @usableFromInline
