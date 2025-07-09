@@ -384,6 +384,18 @@ internal func system_recvmsg(
   return recvmsg(socket, message, flags)
 }
 
+#if os(Linux) || os(Android)
+internal func system_eventfd(
+  _ initval: CUnsignedInt,
+  _ flags: CInt
+) -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(initval, flags) }
+#endif
+  return eventfd(initval, flags)
+}
+#endif
+
 internal func system_fcntl(
   _ fd: Int32,
   _ cmd: Int32
