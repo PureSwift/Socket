@@ -200,6 +200,18 @@ final class SocketTests: XCTestCase {
         }
     }
     #endif
+    
+    func testIPv4LoopbackAddress() async throws {
+        // Test the loopback address byte order issue from GitHub issue #18
+        let loopback = IPv4Address.loopback
+        XCTAssertEqual(loopback.rawValue, "127.0.0.1", "IPv4Address.loopback should return '127.0.0.1', not '1.0.0.127'")
+        
+        // Also test that we can actually bind to loopback
+        // This should not throw "Can't assign requested address" error
+        let address = IPv4SocketAddress(address: .loopback, port: 0)
+        let socket = try await Socket(IPv4Protocol.tcp, bind: address)
+        await socket.close()
+    }
 }
 
 var isRunningInCI: Bool {

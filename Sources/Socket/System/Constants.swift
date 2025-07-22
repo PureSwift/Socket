@@ -174,7 +174,7 @@ internal var _INADDR_ANY: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: nu
 #endif
 
 @_alwaysEmitIntoClient
-internal var _INADDR_LOOPBACK: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: numericCast(INADDR_LOOPBACK)) }
+internal var _INADDR_LOOPBACK: CInterop.IPv4Address { CInterop.IPv4Address(s_addr: UInt32(networkOrder: numericCast(INADDR_LOOPBACK))) }
 
 @_alwaysEmitIntoClient
 internal var _INADDR6_ANY: CInterop.IPv6Address { in6addr_any }
