@@ -79,7 +79,7 @@ let response = try await socket.read(1024)
 print("Received: \(String(data: response, encoding: .utf8) ?? "")")
 
 // Close the socket
-try socket.close()
+await socket.close()
 ```
 
 ### TCP Server
@@ -109,7 +109,7 @@ while true {
             let response = "Hello, Client!".data(using: .utf8)!
             try await client.write(response)
             
-            try client.close()
+            await client.close()
         } catch {
             print("Client error: \(error)")
         }
@@ -165,7 +165,7 @@ let socket = try await Socket(IPv4Protocol.tcp)
 
 // Monitor events
 Task {
-    for await event in socket.events {
+    for await event in socket.event {
         switch event {
         case .read:
             let data = try await socket.read(1024)
@@ -201,7 +201,7 @@ try socket.setOption(.keepAlive, true)
 try socket.setOption(.noDelay, true)  // Disable Nagle's algorithm
 
 // Get socket option
-let keepAlive: Bool = try socket.getOption(.keepAlive)
+let keepAlive: Bool = try socket[.keepAlive]
 print("Keep-alive enabled: \(keepAlive)")
 ```
 
@@ -215,11 +215,10 @@ let socket = try await Socket(IPv6Protocol.tcp)
 let address = IPv6SocketAddress(address: .loopback, port: 8080)
 try await socket.connect(to: address)
 
-// IPv6 with scope ID (for link-local addresses)
+// IPv6 address
 let linkLocal = IPv6SocketAddress(
     address: .init("fe80::1"),
-    port: 8080,
-    scopeID: 5  // Interface index
+    port: 8080
 )
 ```
 
