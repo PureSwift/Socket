@@ -1,18 +1,20 @@
 import Foundation
-import XCTest
+import Testing
 import SystemPackage
 @testable import Socket
 
-final class SocketTests: XCTestCase {
+@Suite("Socket Tests")
+struct SocketTests {
     
     #if os(Linux)
-    func _testUnixSocket() async throws {
+    @Test("Unix Socket Communication")
+    func testUnixSocket() async throws {
         let address = UnixSocketAddress(path: FilePath("/tmp/testsocket.sock"))
-        NSLog("Using path \(address.path.description)")
+        print("Using path \(address.path.description)")
         let socketA = try await Socket(
             UnixProtocol.raw
         )
-        NSLog("Created socket A")
+        print("Created socket A")
         let option: GenericSocketOption.ReuseAddress = true
         try socketA.fileDescriptor.setSocketOption(option)
         do { try socketA.fileDescriptor.bind(address) }
@@ -22,7 +24,7 @@ final class SocketTests: XCTestCase {
         let socketB = try await Socket(
             UnixProtocol.raw
         )
-        NSLog("Created socket B")
+        print("Created socket B")
         try socketB.fileDescriptor.setSocketOption(option)
         try socketB.fileDescriptor.bind(address)
         defer { Task { await socketB.close() } }
@@ -30,13 +32,14 @@ final class SocketTests: XCTestCase {
         let data = Data("Test \(UUID())".utf8)
         
         try await socketA.write(data)
-        NSLog("Socket A wrote data")
+        print("Socket A wrote data")
         let read = try await socketB.read(data.count)
-        NSLog("Socket B read data")
-        XCTAssertEqual(data, read)
+        print("Socket B read data")
+        #expect(data == read)
     }
     #endif
     
+    @Test("IPv4 TCP Socket Communication")
     func testIPv4TCPSocket() async throws {
         let port = UInt16.random(in: 8080 ..< .max)
         print("Using port \(port)")
@@ -47,32 +50,32 @@ final class SocketTests: XCTestCase {
             bind: address
         )
         let newConnectionTask = Task {
-            XCTAssertEqual(try server.fileDescriptor.address(IPv4SocketAddress.self), address)
-            NSLog("Server: Created server socket \(server.fileDescriptor)")
+            #expect(try server.fileDescriptor.address(IPv4SocketAddress.self) == address)
+            print("Server: Created server socket \(server.fileDescriptor)")
             try await server.listen()
             
-            NSLog("Server: Waiting on incoming connection")
+            print("Server: Waiting on incoming connection")
             let newConnection = try await server.accept()
-            NSLog("Server: Got incoming connection \(newConnection.fileDescriptor)")
-            XCTAssertEqual(try newConnection.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
+            print("Server: Got incoming connection \(newConnection.fileDescriptor)")
+            #expect(try newConnection.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue == "127.0.0.1")
             let eventsTask = Task {
                 var events = [Socket.Event]()
                 for try await event in newConnection.event {
                     events.append(event)
-                    NSLog("Server Connection: \(event)")
+                    print("Server Connection: \(event)")
                 }
                 return events
             }
             try await Task.sleep(nanoseconds: 10_000_000)
             let _ = try await newConnection.write(data)
-            NSLog("Server: Wrote outgoing data")
+            print("Server: Wrote outgoing data")
             return try await eventsTask.value
         }
         let serverEventsTask = Task {
             var events = [Socket.Event]()
             for try await event in server.event {
                 events.append(event)
-                NSLog("Server: \(event)")
+                print("Server: \(event)")
             }
             return events
         }
@@ -84,36 +87,37 @@ final class SocketTests: XCTestCase {
             var events = [Socket.Event]()
             for try await event in client.event {
                 events.append(event)
-                NSLog("Client: \(event)")
+                print("Client: \(event)")
             }
             return events
         }
-        XCTAssertEqual(try client.fileDescriptor.address(IPv4SocketAddress.self).address, .any)
-        NSLog("Client: Created client socket \(client.fileDescriptor)")
+        #expect(try client.fileDescriptor.address(IPv4SocketAddress.self).address == .any)
+        print("Client: Created client socket \(client.fileDescriptor)")
         
-        NSLog("Client: Will connect to server")
+        print("Client: Will connect to server")
         do { try await client.connect(to: address) }
         catch Errno.socketIsConnected { }
-        NSLog("Client: Connected to server")
-        XCTAssertEqual(try client.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
-        XCTAssertEqual(try client.fileDescriptor.peerAddress(IPv4SocketAddress.self).address.rawValue, "127.0.0.1")
+        print("Client: Connected to server")
+        #expect(try client.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue == "127.0.0.1")
+        #expect(try client.fileDescriptor.peerAddress(IPv4SocketAddress.self).address.rawValue == "127.0.0.1")
         let read = try await client.read(data.count)
-        NSLog("Client: Read incoming data")
-        XCTAssertEqual(data, read)
+        print("Client: Read incoming data")
+        #expect(data == read)
         try await Task.sleep(nanoseconds: 2_000_000_000)
         await client.close()
         let clientEvents = try await clientEventsTask.value
-        XCTAssertEqual(clientEvents.count, 4)
-        XCTAssertEqual("\(clientEvents)", "[Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.close]")
+        #expect(clientEvents.count == 4)
+        #expect("\(clientEvents)" == "[Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.close]")
         await server.close()
         let serverEvents = try await serverEventsTask.value
-        XCTAssertEqual(serverEvents.count, 2)
-        XCTAssertEqual("\(serverEvents)", "[Socket.Socket.Event.connection, Socket.Socket.Event.close]")
+        #expect(serverEvents.count == 2)
+        #expect("\(serverEvents)" == "[Socket.Socket.Event.connection, Socket.Socket.Event.close]")
         let newConnectionEvents = try await newConnectionTask.value
-        XCTAssertEqual(newConnectionEvents.count, 5)
-        XCTAssertEqual("\(newConnectionEvents)", "[Socket.Socket.Event.write, Socket.Socket.Event.didWrite(41), Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.close]")
+        #expect(newConnectionEvents.count == 5)
+        #expect("\(newConnectionEvents)" == "[Socket.Socket.Event.write, Socket.Socket.Event.didWrite(41), Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.close]")
     }
     
+    @Test("IPv4 UDP Socket Communication")
     func testIPv4UDPSocket() async throws {
         let port = UInt16.random(in: 8080 ..< .max)
         print("Using port \(port)")
@@ -129,20 +133,20 @@ final class SocketTests: XCTestCase {
                 bind: address
             )
             defer { Task { await server.close() } }
-            NSLog("Server: Created server socket \(server.fileDescriptor)")
+            print("Server: Created server socket \(server.fileDescriptor)")
             
             do {
-                NSLog("Server: Waiting to receive incoming message")
+                print("Server: Waiting to receive incoming message")
                 let (read, clientAddress) = try await server.receiveMessage(data.count, fromAddressOf: type(of: address))
-                NSLog("Server: Received incoming message")
-                XCTAssertEqual(data, read)
+                print("Server: Received incoming message")
+                #expect(data == read)
                 
-                NSLog("Server: Waiting to send outgoing message")
+                print("Server: Waiting to send outgoing message")
                 try await server.sendMessage(data, to: clientAddress)
-                NSLog("Server: Sent outgoing message")
+                print("Server: Sent outgoing message")
             } catch {
                 print("Server:", error)
-                XCTFail("\(error)")
+                Issue.record("Server error: \(error)")
             }
         }
         
@@ -150,22 +154,23 @@ final class SocketTests: XCTestCase {
             IPv4Protocol.udp
         )
         defer { Task { await client.close() } }
-        NSLog("Client: Created client socket \(client.fileDescriptor)")
+        print("Client: Created client socket \(client.fileDescriptor)")
         
-        NSLog("Client: Waiting to send outgoing message")
+        print("Client: Waiting to send outgoing message")
         try await client.sendMessage(data, to: address)
-        NSLog("Client: Sent outgoing message")
+        print("Client: Sent outgoing message")
         
-        NSLog("Client: Waiting to receive incoming message")
+        print("Client: Waiting to receive incoming message")
         let (read, _) = try await client.receiveMessage(data.count, fromAddressOf: type(of: address))
-        NSLog("Client: Received incoming message")
-        XCTAssertEqual(data, read)
+        print("Client: Received incoming message")
+        #expect(data == read)
     }
     
+    @Test("Network Interface IPv4 Enumeration")
     func testNetworkInterfaceIPv4() throws {
         let interfaces = try NetworkInterface<IPv4SocketAddress>.interfaces
         if !isRunningInCI {
-            XCTAssert(interfaces.isEmpty == false)
+            #expect(!interfaces.isEmpty)
         }
         for interface in interfaces {
             print("\(interface.id.index). \(interface.id.name)")
@@ -176,10 +181,11 @@ final class SocketTests: XCTestCase {
         }
     }
     
+    @Test("Network Interface IPv6 Enumeration")
     func testNetworkInterfaceIPv6() throws {
         let interfaces = try NetworkInterface<IPv6SocketAddress>.interfaces
         if !isRunningInCI {
-            XCTAssert(interfaces.isEmpty == false)
+            #expect(!interfaces.isEmpty)
         }
         for interface in interfaces {
             print("\(interface.id.index). \(interface.id.name)")
@@ -191,6 +197,7 @@ final class SocketTests: XCTestCase {
     }
     
     #if canImport(Darwin) || os(Linux)
+    @Test("Network Interface Link Layer Enumeration")
     func testNetworkInterfaceLinkLayer() throws {
         let interfaces = try NetworkInterface<LinkLayerSocketAddress>.interfaces
         for interface in interfaces {
@@ -201,18 +208,19 @@ final class SocketTests: XCTestCase {
     }
     #endif
     
+    @Test("IPv4 Loopback Address Byte Order Fix", .tags(.bugfix))
     func testIPv4LoopbackAddress() async throws {
         // Test the loopback address byte order issue from GitHub issue #18
         let loopback = IPv4Address.loopback
-        XCTAssertEqual(loopback.rawValue, "127.0.0.1", "IPv4Address.loopback should return '127.0.0.1', not '1.0.0.127'")
+        #expect(loopback.rawValue == "127.0.0.1", "IPv4Address.loopback should return '127.0.0.1', not '1.0.0.127'")
         
         // Test that loopback is equivalent to manually constructed 127.0.0.1
         let manualLoopback = IPv4Address(127, 0, 0, 1)
-        XCTAssertEqual(loopback, manualLoopback, "IPv4Address.loopback should equal manually constructed IPv4Address(127, 0, 0, 1)")
+        #expect(loopback == manualLoopback, "IPv4Address.loopback should equal manually constructed IPv4Address(127, 0, 0, 1)")
         
         // Test that loopback is equivalent to string-constructed address
         let stringLoopback = IPv4Address(rawValue: "127.0.0.1")!
-        XCTAssertEqual(loopback, stringLoopback, "IPv4Address.loopback should equal string-constructed address")
+        #expect(loopback == stringLoopback, "IPv4Address.loopback should equal string-constructed address")
         
         // Test that we can actually bind to loopback for TCP
         // This should not throw "Can't assign requested address" error
@@ -227,10 +235,10 @@ final class SocketTests: XCTestCase {
         
         // Verify the bound addresses are actually loopback
         let boundTcpAddress = try tcpSocket.fileDescriptor.address(IPv4SocketAddress.self)
-        XCTAssertEqual(boundTcpAddress.address.rawValue, "127.0.0.1", "Bound TCP socket should be on loopback address")
+        #expect(boundTcpAddress.address.rawValue == "127.0.0.1", "Bound TCP socket should be on loopback address")
         
         let boundUdpAddress = try udpSocket.fileDescriptor.address(IPv4SocketAddress.self)
-        XCTAssertEqual(boundUdpAddress.address.rawValue, "127.0.0.1", "Bound UDP socket should be on loopback address")
+        #expect(boundUdpAddress.address.rawValue == "127.0.0.1", "Bound UDP socket should be on loopback address")
     }
 }
 
@@ -247,4 +255,8 @@ var isRunningInCI: Bool {
         }
     }
     return false
+}
+
+extension Tag {
+    @Tag static var bugfix: Self
 }
