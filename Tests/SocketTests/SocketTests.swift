@@ -206,11 +206,31 @@ final class SocketTests: XCTestCase {
         let loopback = IPv4Address.loopback
         XCTAssertEqual(loopback.rawValue, "127.0.0.1", "IPv4Address.loopback should return '127.0.0.1', not '1.0.0.127'")
         
-        // Also test that we can actually bind to loopback
+        // Test that loopback is equivalent to manually constructed 127.0.0.1
+        let manualLoopback = IPv4Address(127, 0, 0, 1)
+        XCTAssertEqual(loopback, manualLoopback, "IPv4Address.loopback should equal manually constructed IPv4Address(127, 0, 0, 1)")
+        
+        // Test that loopback is equivalent to string-constructed address
+        let stringLoopback = IPv4Address(rawValue: "127.0.0.1")!
+        XCTAssertEqual(loopback, stringLoopback, "IPv4Address.loopback should equal string-constructed address")
+        
+        // Test that we can actually bind to loopback for TCP
         // This should not throw "Can't assign requested address" error
-        let address = IPv4SocketAddress(address: .loopback, port: 0)
-        let socket = try await Socket(IPv4Protocol.tcp, bind: address)
-        await socket.close()
+        let tcpAddress = IPv4SocketAddress(address: .loopback, port: 0)
+        let tcpSocket = try await Socket(IPv4Protocol.tcp, bind: tcpAddress)
+        defer { Task { await tcpSocket.close() } }
+        
+        // Test that we can also bind to loopback for UDP
+        let udpAddress = IPv4SocketAddress(address: .loopback, port: 0)
+        let udpSocket = try await Socket(IPv4Protocol.udp, bind: udpAddress)
+        defer { Task { await udpSocket.close() } }
+        
+        // Verify the bound addresses are actually loopback
+        let boundTcpAddress = try tcpSocket.fileDescriptor.address(IPv4SocketAddress.self)
+        XCTAssertEqual(boundTcpAddress.address.rawValue, "127.0.0.1", "Bound TCP socket should be on loopback address")
+        
+        let boundUdpAddress = try udpSocket.fileDescriptor.address(IPv4SocketAddress.self)
+        XCTAssertEqual(boundUdpAddress.address.rawValue, "127.0.0.1", "Bound UDP socket should be on loopback address")
     }
 }
 
