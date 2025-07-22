@@ -1,20 +1,27 @@
 import Foundation
 import Testing
 import SystemPackage
+import Logging
 @testable import Socket
 
 @Suite("Socket Tests")
 struct SocketTests {
     
+    static let logger = Logger(label: "logger") { label in
+        var handler = StreamLogHandler.standardOutput(label: label)
+        // handler.logLevel = .debug
+        return handler
+    }
+    
     #if os(Linux)
     @Test("Unix Socket Communication")
     func testUnixSocket() async throws {
         let address = UnixSocketAddress(path: FilePath("/tmp/testsocket.sock"))
-        print("Using path \(address.path.description)")
+        Self.logger.info("Using path \(address.path.description)")
         let socketA = try await Socket(
             UnixProtocol.raw
         )
-        print("Created socket A")
+        Self.logger.info("Created socket A")
         let option: GenericSocketOption.ReuseAddress = true
         try socketA.fileDescriptor.setSocketOption(option)
         do { try socketA.fileDescriptor.bind(address) }
@@ -24,7 +31,7 @@ struct SocketTests {
         let socketB = try await Socket(
             UnixProtocol.raw
         )
-        print("Created socket B")
+        Self.logger.info("Created socket B")
         try socketB.fileDescriptor.setSocketOption(option)
         try socketB.fileDescriptor.bind(address)
         defer { Task { await socketB.close() } }
@@ -32,9 +39,9 @@ struct SocketTests {
         let data = Data("Test \(UUID())".utf8)
         
         try await socketA.write(data)
-        print("Socket A wrote data")
+        Self.logger.info("Socket A wrote data")
         let read = try await socketB.read(data.count)
-        print("Socket B read data")
+        Self.logger.info("Socket B read data")
         #expect(data == read)
     }
     #endif
@@ -42,7 +49,7 @@ struct SocketTests {
     @Test("IPv4 TCP Socket Communication")
     func testIPv4TCPSocket() async throws {
         let port = UInt16.random(in: 8080 ..< .max)
-        print("Using port \(port)")
+        Self.logger.info("Using port \(port)")
         let address = IPv4SocketAddress(address: .any, port: port)
         let data = Data("Test \(UUID())".utf8)
         let server = try await Socket(
@@ -51,31 +58,31 @@ struct SocketTests {
         )
         let newConnectionTask = Task {
             #expect(try server.fileDescriptor.address(IPv4SocketAddress.self) == address)
-            print("Server: Created server socket \(server.fileDescriptor)")
+            Self.logger.info("Server: Created server socket \(server.fileDescriptor)")
             try await server.listen()
             
-            print("Server: Waiting on incoming connection")
+            Self.logger.info("Server: Waiting on incoming connection")
             let newConnection = try await server.accept()
-            print("Server: Got incoming connection \(newConnection.fileDescriptor)")
+            Self.logger.info("Server: Got incoming connection \(newConnection.fileDescriptor)")
             #expect(try newConnection.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue == "127.0.0.1")
             let eventsTask = Task {
                 var events = [Socket.Event]()
                 for try await event in newConnection.event {
                     events.append(event)
-                    print("Server Connection: \(event)")
+                    Self.logger.info("Server Connection: \(event)")
                 }
                 return events
             }
             try await Task.sleep(nanoseconds: 10_000_000)
             let _ = try await newConnection.write(data)
-            print("Server: Wrote outgoing data")
+            Self.logger.info("Server: Wrote outgoing data")
             return try await eventsTask.value
         }
         let serverEventsTask = Task {
             var events = [Socket.Event]()
             for try await event in server.event {
                 events.append(event)
-                print("Server: \(event)")
+                Self.logger.info("Server: \(event)")
             }
             return events
         }
@@ -87,21 +94,21 @@ struct SocketTests {
             var events = [Socket.Event]()
             for try await event in client.event {
                 events.append(event)
-                print("Client: \(event)")
+                Self.logger.info("Client: \(event)")
             }
             return events
         }
         #expect(try client.fileDescriptor.address(IPv4SocketAddress.self).address == .any)
-        print("Client: Created client socket \(client.fileDescriptor)")
+        Self.logger.info("Client: Created client socket \(client.fileDescriptor)")
         
-        print("Client: Will connect to server")
+        Self.logger.info("Client: Will connect to server")
         do { try await client.connect(to: address) }
         catch Errno.socketIsConnected { }
-        print("Client: Connected to server")
+        Self.logger.info("Client: Connected to server")
         #expect(try client.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue == "127.0.0.1")
         #expect(try client.fileDescriptor.peerAddress(IPv4SocketAddress.self).address.rawValue == "127.0.0.1")
         let read = try await client.read(data.count)
-        print("Client: Read incoming data")
+        Self.logger.info("Client: Read incoming data")
         #expect(data == read)
         try await Task.sleep(nanoseconds: 2_000_000_000)
         await client.close()
@@ -120,7 +127,7 @@ struct SocketTests {
     @Test("IPv4 UDP Socket Communication")
     func testIPv4UDPSocket() async throws {
         let port = UInt16.random(in: 8080 ..< .max)
-        print("Using port \(port)")
+        Self.logger.info("Using port \(port)")
         let address = IPv4SocketAddress(
             address: .any,
             port: port
@@ -133,19 +140,19 @@ struct SocketTests {
                 bind: address
             )
             defer { Task { await server.close() } }
-            print("Server: Created server socket \(server.fileDescriptor)")
+            Self.logger.info("Server: Created server socket \(server.fileDescriptor)")
             
             do {
-                print("Server: Waiting to receive incoming message")
+                Self.logger.info("Server: Waiting to receive incoming message")
                 let (read, clientAddress) = try await server.receiveMessage(data.count, fromAddressOf: type(of: address))
-                print("Server: Received incoming message")
+                Self.logger.info("Server: Received incoming message")
                 #expect(data == read)
                 
-                print("Server: Waiting to send outgoing message")
+                Self.logger.info("Server: Waiting to send outgoing message")
                 try await server.sendMessage(data, to: clientAddress)
-                print("Server: Sent outgoing message")
+                Self.logger.info("Server: Sent outgoing message")
             } catch {
-                print("Server:", error)
+                Self.logger.error("Server error: \(error)")
                 Issue.record("Server error: \(error)")
             }
         }
@@ -154,15 +161,15 @@ struct SocketTests {
             IPv4Protocol.udp
         )
         defer { Task { await client.close() } }
-        print("Client: Created client socket \(client.fileDescriptor)")
+        Self.logger.info("Client: Created client socket \(client.fileDescriptor)")
         
-        print("Client: Waiting to send outgoing message")
+        Self.logger.info("Client: Waiting to send outgoing message")
         try await client.sendMessage(data, to: address)
-        print("Client: Sent outgoing message")
+        Self.logger.info("Client: Sent outgoing message")
         
-        print("Client: Waiting to receive incoming message")
+        Self.logger.info("Client: Waiting to receive incoming message")
         let (read, _) = try await client.receiveMessage(data.count, fromAddressOf: type(of: address))
-        print("Client: Received incoming message")
+        Self.logger.info("Client: Received incoming message")
         #expect(data == read)
     }
     
@@ -173,10 +180,10 @@ struct SocketTests {
             #expect(!interfaces.isEmpty)
         }
         for interface in interfaces {
-            print("\(interface.id.index). \(interface.id.name)")
-            print("\(interface.address.address) \(interface.address.port)")
+            Self.logger.info("\(interface.id.index). \(interface.id.name)")
+            Self.logger.info("\(interface.address.address) \(interface.address.port)")
             if let netmask = interface.netmask {
-                print("\(netmask.address) \(netmask.port)")
+                Self.logger.info("\(netmask.address) \(netmask.port)")
             }
         }
     }
@@ -188,10 +195,10 @@ struct SocketTests {
             #expect(!interfaces.isEmpty)
         }
         for interface in interfaces {
-            print("\(interface.id.index). \(interface.id.name)")
-            print("\(interface.address.address) \(interface.address.port)")
+            Self.logger.info("\(interface.id.index). \(interface.id.name)")
+            Self.logger.info("\(interface.address.address) \(interface.address.port)")
             if let netmask = interface.netmask {
-                print("\(netmask.address) \(netmask.port)")
+                Self.logger.info("\(netmask.address) \(netmask.port)")
             }
         }
     }
@@ -201,8 +208,8 @@ struct SocketTests {
     func testNetworkInterfaceLinkLayer() throws {
         let interfaces = try NetworkInterface<LinkLayerSocketAddress>.interfaces
         for interface in interfaces {
-            print("\(interface.id.index). \(interface.id.name)")
-            print(interface.address.address)
+            Self.logger.info("\(interface.id.index). \(interface.id.name)")
+            Self.logger.info("\(interface.address.address)")
             assert(interface.id.index == numericCast(interface.address.index))
         }
     }
