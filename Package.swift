@@ -25,6 +25,10 @@ var package = Package(
         .package(
             url: "https://github.com/apple/swift-system",
             from: "1.5.0"
+        ),
+        .package(
+            url: "https://github.com/apple/swift-log.git",
+            from: "1.0.0"
         )
     ],
     targets: [
@@ -43,7 +47,13 @@ var package = Package(
         ),
         .testTarget(
             name: "SocketTests",
-            dependencies: ["Socket"]
+            dependencies: [
+                "Socket",
+                .product(
+                    name: "Logging",
+                    package: "swift-log"
+                )
+            ]
         )
     ]
 )
