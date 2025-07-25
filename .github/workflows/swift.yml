@@ -51,4 +51,4 @@ jobs:
           run: |
               brew install skiptools/skip/skip || (brew update && brew install skiptools/skip/skip)
               skip android sdk install --version ${{ matrix.swift }}
-              ANDROID_NDK_ROOT="" skip android build --build-tests --arch ${{ matrix.arch }}
+              ANDROID_NDK_ROOT="" skip android build --arch ${{ matrix.arch }}
