@@ -248,7 +248,8 @@ struct SocketTests {
         #expect(boundUdpAddress.address.rawValue == "127.0.0.1", "Bound UDP socket should be on loopback address")
     }
   
-    func testTCPNoDelay() async throws {
+    @Test
+    func tcpNoDelay() async throws {
         // Create a TCP socket
         let socket = try await Socket(IPv4Protocol.tcp)
         defer { Task { await socket.close() } }
@@ -259,24 +260,25 @@ struct SocketTests {
         
         // Test getting TCP_NODELAY option
         let retrievedOption = try socket[TCPSocketOption.NoDelay.self]
-        XCTAssertEqual(retrievedOption.boolValue, true)
+        #expect(retrievedOption.boolValue == true)
         
         // Test disabling TCP_NODELAY
         let disableNodelay = TCPSocketOption.NoDelay(false)
         try socket.setOption(disableNodelay)
         
         let retrievedDisabled = try socket[TCPSocketOption.NoDelay.self]
-        XCTAssertEqual(retrievedDisabled.boolValue, false)
+        #expect(retrievedDisabled.boolValue == false)
         
         // Test with boolean literal
         let literalOption: TCPSocketOption.NoDelay = true
         try socket.setOption(literalOption)
         
         let retrievedLiteral = try socket[TCPSocketOption.NoDelay.self]
-        XCTAssertEqual(retrievedLiteral.boolValue, true)
+        #expect(retrievedLiteral.boolValue == true)
     }
     
-    func testTCPNoDelayBehavior() async throws {
+    @Test
+    func tcpNoDelayBehavior() async throws {
         // This test verifies that TCP_NODELAY option works by testing with a connected socket pair
         let port = UInt16.random(in: 8080 ..< .max)
         print("Testing TCP_NODELAY behavior on port \(port)")
@@ -296,7 +298,7 @@ struct SocketTests {
         // Test that we can set TCP_NODELAY before connecting
         try client.setOption(TCPSocketOption.NoDelay(true))
         let nodeDelayBeforeConnect = try client[TCPSocketOption.NoDelay.self]
-        XCTAssertEqual(nodeDelayBeforeConnect.boolValue, true)
+        #expect(nodeDelayBeforeConnect.boolValue == true)
         
         // Connect to server
         do { try await client.connect(to: address) }
@@ -308,12 +310,12 @@ struct SocketTests {
         
         // Verify TCP_NODELAY is still set after connection
         let nodeDelayAfterConnect = try client[TCPSocketOption.NoDelay.self]
-        XCTAssertEqual(nodeDelayAfterConnect.boolValue, true)
+        #expect(nodeDelayAfterConnect.boolValue == true)
         
         // Test setting TCP_NODELAY on the server's accepted connection
         try serverConnection.setOption(TCPSocketOption.NoDelay(false))
         let serverNodeDelay = try serverConnection[TCPSocketOption.NoDelay.self]
-        XCTAssertEqual(serverNodeDelay.boolValue, false)
+        #expect(serverNodeDelay.boolValue == false)
         
         // Demonstrate that small writes work with TCP_NODELAY
         // (The actual latency difference is hard to measure reliably on localhost)
@@ -321,7 +323,7 @@ struct SocketTests {
         try await client.write(testData)
         
         let receivedData = try await serverConnection.read(testData.count)
-        XCTAssertEqual(testData, receivedData)
+        #expect(testData == receivedData)
         
         print("Successfully tested TCP_NODELAY option setting and data transmission")
     }
