@@ -280,32 +280,6 @@ let icmpPacket = createICMPPacket() // Your ICMP packet data
 try await socket.write(icmpPacket)
 ```
 
-## Error Handling
-
-Socket operations throw `SocketError` which conforms to Swift's `Error` protocol:
-
-```swift
-import Socket
-
-do {
-    let socket = try await Socket(IPv4Protocol.tcp)
-    try await socket.connect(to: address)
-} catch let error as SocketError {
-    switch error.code {
-    case .connectionRefused:
-        print("Connection refused by server")
-    case .networkUnreachable:
-        print("Network is unreachable")
-    case .timeout:
-        print("Operation timed out")
-    default:
-        print("Socket error: \(error)")
-    }
-} catch {
-    print("Unexpected error: \(error)")
-}
-```
-
 ## Requirements
 
 - Swift 5.7+
