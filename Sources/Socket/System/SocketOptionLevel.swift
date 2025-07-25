@@ -19,6 +19,9 @@ public extension SocketOptionLevel {
     
     @_alwaysEmitIntoClient
     static var `default`: SocketOptionLevel { SocketOptionLevel(_SOL_SOCKET) }
+    
+    @_alwaysEmitIntoClient
+    static var tcp: SocketOptionLevel { SocketOptionLevel(_IPPROTO_TCP) }
 }
 
 #if os(Linux)
