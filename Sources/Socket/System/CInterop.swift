@@ -48,7 +48,7 @@ public extension CInterop {
      typealias SocketAddressFamily = sa_family_t
 
     /// Socket Type
-    #if os(Linux)
+    #if os(Linux) && canImport(Glibc)
     typealias SocketType = __socket_type
     #else
     typealias SocketType = CInt

@@ -13,7 +13,7 @@ public struct SocketType: RawRepresentable, Hashable, Sendable {
   public init(rawValue: CInt) { self.rawValue = rawValue }
     
   private init(_ cValue: CInterop.SocketType) {
-      #if os(Linux)
+      #if os(Linux) && canImport(Glibc)
       self.init(rawValue: numericCast(cValue.rawValue))
       #else
       self.init(rawValue: cValue)

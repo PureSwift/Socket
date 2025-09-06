@@ -13,12 +13,16 @@ public struct SocketFlags: OptionSet, Hashable, Codable, Sendable {
     @_alwaysEmitIntoClient
     public init(rawValue: CInt) { self.rawValue = rawValue }
 
-    #if os(Linux)
+    #if os(Linux) && canImport(Glibc)
     private init(_ cValue: CInterop.SocketType) { 
         self.init(rawValue: numericCast(cValue.rawValue)) 
     }
     #elseif os(Android)
     private init(_ cValue: CInt) { 
+        self.init(rawValue: cValue) 
+    }
+    #else
+    private init(_ cValue: CInterop.SocketType) { 
         self.init(rawValue: cValue) 
     }
     #endif
