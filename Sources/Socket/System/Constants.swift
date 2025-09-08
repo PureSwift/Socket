@@ -31,8 +31,13 @@ internal var _O_RDWR: CInt { O_RDWR }
 
 #if !os(Windows)
 // TODO: API?
+#if canImport(Glibc) || canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _O_ACCMODE: CInt { O_ACCMODE }
+#elseif canImport(Musl)
+@_alwaysEmitIntoClient
+internal var _O_ACCMODE: CInt { 03 } // O_ACCMODE equivalent for musl
+#endif
 
 @_alwaysEmitIntoClient
 internal var _O_NONBLOCK: CInt { O_NONBLOCK }
