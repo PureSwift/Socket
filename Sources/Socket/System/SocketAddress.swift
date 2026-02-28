@@ -8,7 +8,7 @@ public protocol SocketAddress: Sendable {
     
     /// Unsafe pointer closure
     func withUnsafePointer<Result, Error>(
-      _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws(Error) -> Result
+      _ body: (UnsafePointer<CInterop.SocketAddress>, CInterop.SocketLength) throws(Error) -> Result
     ) rethrows -> Result where Error: Swift.Error
     
     static func withUnsafePointer(
@@ -16,7 +16,7 @@ public protocol SocketAddress: Sendable {
     ) -> Self
     
     static func withUnsafePointer(
-        _ body: (UnsafeMutablePointer<CInterop.SocketAddress>, UInt32) throws -> ()
+        _ body: (UnsafeMutablePointer<CInterop.SocketAddress>, CInterop.SocketLength) throws -> ()
     ) rethrows -> Self
 }
 
