@@ -38,7 +38,7 @@ internal extension String {
                 T.family.rawValue,
                 $0,
                 cString,
-                numericCast(T.stringLength)
+                CInterop.SocketLength(T.stringLength)
             ) != nil
         }
         guard success else {

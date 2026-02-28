@@ -27,7 +27,7 @@ public struct UnixSocketAddress: SocketAddress, Equatable, Hashable {
     }
     
     public func withUnsafePointer<Result, Error>(
-      _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws(Error) -> Result
+      _ body: (UnsafePointer<CInterop.SocketAddress>, CInterop.SocketLength) throws(Error) -> Result
     ) rethrows -> Result where Error: Swift.Error {
         return try path.withPlatformString { platformString in
             var socketAddress = CInterop.UnixSocketAddress()
@@ -43,7 +43,7 @@ public struct UnixSocketAddress: SocketAddress, Equatable, Hashable {
     }
     
     public static func withUnsafePointer(
-        _ body: (UnsafeMutablePointer<CInterop.SocketAddress>, UInt32) throws -> ()
+        _ body: (UnsafeMutablePointer<CInterop.SocketAddress>, CInterop.SocketLength) throws -> ()
     ) rethrows -> Self {
         var socketAddress = CInterop.UnixSocketAddress()
         try socketAddress.withUnsafeMutablePointer(body)

@@ -162,7 +162,7 @@ internal func system_inet_pton(
   return inet_pton(family, cString, address)
 }
 
-internal func system_inet_ntop(_ family: Int32, _ pointer : UnsafeRawPointer, _ string: UnsafeMutablePointer<CChar>, _ length: UInt32) -> UnsafePointer<CChar>? {
+internal func system_inet_ntop(_ family: Int32, _ pointer : UnsafeRawPointer, _ string: UnsafeMutablePointer<CChar>, _ length: socklen_t) -> UnsafePointer<CChar>? {
   #if ENABLE_MOCKING
   //if mockingEnabled { return _mock(family, pointer, string, length) }
   #endif
@@ -176,7 +176,7 @@ internal func system_socket(_ fd: Int32, _ fd2: Int32, _ fd3: Int32) -> Int32 {
   return socket(fd, fd2, fd3)
 }
 
-internal func system_setsockopt(_ fd: Int32, _ fd2: Int32, _ fd3: Int32, _ pointer: UnsafeRawPointer, _ dataLength: UInt32) -> Int32 {
+internal func system_setsockopt(_ fd: Int32, _ fd2: Int32, _ fd3: Int32, _ pointer: UnsafeRawPointer, _ dataLength: socklen_t) -> Int32 {
   #if ENABLE_MOCKING
   if mockingEnabled { return _mock(fd, fd2, fd3, pointer, dataLength) }
   #endif
@@ -188,7 +188,7 @@ internal func system_getsockopt(
   _ level: CInt,
   _ option: CInt,
   _ value: UnsafeMutableRawPointer?,
-  _ length: UnsafeMutablePointer<UInt32>
+  _ length: UnsafeMutablePointer<socklen_t>
 ) -> CInt {
   #if ENABLE_MOCKING
   if mockingEnabled { return _mock(socket, level, option, value, length) }
@@ -199,7 +199,7 @@ internal func system_getsockopt(
 internal func system_bind(
     _ socket: CInt,
     _ address: UnsafePointer<CInterop.SocketAddress>,
-    _ length: UInt32
+    _ length: socklen_t
 ) -> CInt {
   #if ENABLE_MOCKING
   if mockingEnabled { return _mock(socket, address, length) }
@@ -247,7 +247,7 @@ internal func system_getaddrinfo(
 
 internal func system_getnameinfo(
   _ sa: UnsafePointer<CInterop.SocketAddress>,
-  _ salen: UInt32,
+  _ salen: socklen_t,
   _ host: UnsafeMutablePointer<CChar>?,
   _ hostlen: socklen_t,
   _ serv: UnsafeMutablePointer<CChar>?,
@@ -325,7 +325,7 @@ internal func system_sendto(
   _ length: Int,
   _ flags: CInt,
   _ dest_addr: UnsafePointer<CInterop.SocketAddress>?,
-  _ dest_len: UInt32
+  _ dest_len: socklen_t
 ) -> Int {
   #if ENABLE_MOCKING
   if mockingEnabled {
@@ -341,7 +341,7 @@ internal func system_recvfrom(
   _ length: Int,
   _ flags: CInt,
   _ address: UnsafeMutablePointer<CInterop.SocketAddress>?,
-  _ addres_len: UnsafeMutablePointer<UInt32>?
+  _ addres_len: UnsafeMutablePointer<socklen_t>?
 ) -> Int {
   #if ENABLE_MOCKING
   if mockingEnabled {
@@ -509,14 +509,14 @@ internal func system_link_ntoa(_ address: UnsafePointer<sockaddr_dl>) -> UnsafeM
 }
 #endif
 
-internal func system_getsockname(_ fd: CInt, _ address: UnsafeMutablePointer<CInterop.SocketAddress>, _ length: UnsafeMutablePointer<UInt32>) -> CInt {
+internal func system_getsockname(_ fd: CInt, _ address: UnsafeMutablePointer<CInterop.SocketAddress>, _ length: UnsafeMutablePointer<socklen_t>) -> CInt {
 #if ENABLE_MOCKING
     if mockingEnabled { return _mock(fd, address) }
 #endif
     return getsockname(fd, address, length)
 }
 
-internal func system_getpeername(_ fd: CInt, _ address: UnsafeMutablePointer<CInterop.SocketAddress>, _ length: UnsafeMutablePointer<UInt32>) -> CInt {
+internal func system_getpeername(_ fd: CInt, _ address: UnsafeMutablePointer<CInterop.SocketAddress>, _ length: UnsafeMutablePointer<socklen_t>) -> CInt {
 #if ENABLE_MOCKING
     if mockingEnabled { return _mock(fd, address) }
 #endif

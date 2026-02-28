@@ -51,7 +51,7 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
     }
     
     public func withUnsafePointer<Result, Error>(
-      _ body: (UnsafePointer<CInterop.SocketAddress>, UInt32) throws(Error) -> Result
+        _ body: (UnsafePointer<CInterop.SocketAddress>, CInterop.SocketLength) throws(Error) -> Result
     ) rethrows -> Result where Error: Swift.Error {
         
         var socketAddress = CSocketAddressType()
@@ -76,7 +76,7 @@ public struct LinkLayerSocketAddress: SocketAddress, Equatable, Hashable {
     }
     
     public static func withUnsafePointer(
-        _ body: (UnsafeMutablePointer<CInterop.SocketAddress>, UInt32) throws -> ()
+        _ body: (UnsafeMutablePointer<CInterop.SocketAddress>, CInterop.SocketLength) throws -> ()
     ) rethrows -> Self {
         var socketAddress = CSocketAddressType()
         try socketAddress.withUnsafeMutablePointer(body)
