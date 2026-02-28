@@ -54,6 +54,8 @@ public extension CInterop {
     typealias SocketType = CInt
     #endif
     
+    typealias SocketLength = socklen_t
+    
     /// The C `addrinfo` type
     typealias AddressInfo = addrinfo
     
