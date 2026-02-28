@@ -179,7 +179,7 @@ extension SocketDescriptor {
     ) -> Result<(), Errno> {
         nothingOrErrno(retryOnInterrupt: retryOnInterrupt) {
             option.withUnsafeBytes { bufferPointer in
-                system_setsockopt(self.rawValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, UInt32(bufferPointer.count))
+                system_setsockopt(self.rawValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, CInterop.SocketLength(bufferPointer.count))
             }
         }
     }
@@ -208,7 +208,7 @@ extension SocketDescriptor {
     ) -> Result<Option, Errno> {
         do {
             let value = try Option.withUnsafeBytes { bufferPointer throws(Errno) -> () in
-                var length = UInt32(bufferPointer.count)
+                var length = CInterop.SocketLength(bufferPointer.count)
                 guard system_getsockopt(self.rawValue, Option.ID.optionLevel.rawValue, Option.id.rawValue, bufferPointer.baseAddress!, &length) != -1 else {
                     throw Errno.current
                 }
@@ -498,7 +498,7 @@ extension SocketDescriptor {
     internal func _accept(
         retryOnInterrupt: Bool
     ) -> Result<SocketDescriptor, Errno> {
-        var length: UInt32 = 0
+        var length: CInterop.SocketLength = 0
         return valueOrErrno(retryOnInterrupt: retryOnInterrupt) {
             system_accept(self.rawValue, nil, &length)
         }.map(SocketDescriptor.init(rawValue:))
