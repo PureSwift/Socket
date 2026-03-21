@@ -48,13 +48,13 @@ public extension SocketDescriptor.Event.Flags {
     ///
     /// See the description of the `O_CLOEXEC` flag in `open(2)` for reasons why this may be useful.
     @_alwaysEmitIntoClient
-    static var nonBlocking: SocketDescriptor.Event.Flags { SocketDescriptor.Event.Flags(_EFD_CLOEXEC) }
+    static var nonBlocking: SocketDescriptor.Event.Flags { SocketDescriptor.Event.Flags(_EFD_NONBLOCK) }
     
     /// Set the `O_NONBLOCK` file status flag on the new open file description.
     ///
     /// Using this flag saves extra calls to `fcntl(2)` to achieve the same result.
     @_alwaysEmitIntoClient
-    static var closeOnExec: SocketDescriptor.Event.Flags { SocketDescriptor.Event.Flags(_EFD_NONBLOCK) }
+    static var closeOnExec: SocketDescriptor.Event.Flags { SocketDescriptor.Event.Flags(_EFD_CLOEXEC) }
     
     /// Provide semaphore-like semantics for reads from the new file descriptor.
     @_alwaysEmitIntoClient
