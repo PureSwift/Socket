@@ -55,6 +55,22 @@ public protocol SocketManager: AnyObject, Sendable {
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int
     
+    #if os(Linux) || os(Android) || canImport(Darwin)
+    /// Send a message carrying file descriptors as `SCM_RIGHTS` ancillary data.
+    func sendMessage<T: DataProtocol>(
+        _ data: T,
+        fileDescriptors: [SocketDescriptor],
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> Int
+    
+    /// Receive a message along with any `SCM_RIGHTS` file descriptors that accompany it.
+    func receiveMessage(
+        _ length: Int,
+        maximumDescriptors: Int,
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> SocketMessage
+    #endif
+    
     /// Accept new socket.
     func accept(
         for fileDescriptor: SocketDescriptor
@@ -89,3 +105,27 @@ public protocol SocketManagerConfiguration: Sendable {
     
     func configureManager()
 }
+
+
+#if os(Linux) || os(Android) || canImport(Darwin)
+public extension SocketManager {
+    
+    /// File descriptor passing is optional; a manager that does not implement it reports so.
+    func sendMessage<T: DataProtocol>(
+        _ data: T,
+        fileDescriptors: [SocketDescriptor],
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> Int {
+        throw Errno.notSupported
+    }
+    
+    /// File descriptor passing is optional; a manager that does not implement it reports so.
+    func receiveMessage(
+        _ length: Int,
+        maximumDescriptors: Int,
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> SocketMessage {
+        throw Errno.notSupported
+    }
+}
+#endif
