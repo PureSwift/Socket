@@ -112,7 +112,7 @@ internal struct EpollEventQueue: EventQueue, @unchecked Sendable {
             if event.events & _EPOLLPRI != 0 { events.insert(.readUrgent) }
             if event.events & _EPOLLOUT != 0 { events.insert(.write) }
             if event.events & _EPOLLERR != 0 { events.insert(.error) }
-            if event.events & _EPOLLHUP != 0 { events.insert(.hangup) }
+            if event.events & (_EPOLLHUP | _EPOLLRDHUP) != 0 { events.insert(.hangup) }
             readiness.append(
                 .init(
                     fileDescriptor: SocketDescriptor(rawValue: fileDescriptor),
@@ -140,6 +140,8 @@ internal struct EpollEventQueue: EventQueue, @unchecked Sendable {
 
     private static func mask(for events: FileEvents) -> UInt32 {
         var mask: UInt32 = 0
+        // half close is only reported when explicitly requested
+        if events.contains(.hangup) { mask |= _EPOLLRDHUP }
         if events.contains(.read) { mask |= _EPOLLIN }
         if events.contains(.readUrgent) { mask |= _EPOLLPRI }
         if events.contains(.write) { mask |= _EPOLLOUT }
