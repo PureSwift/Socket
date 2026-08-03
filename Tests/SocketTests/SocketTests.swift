@@ -113,15 +113,17 @@ struct SocketTests {
         try await Task.sleep(nanoseconds: 2_000_000_000)
         await client.close()
         let clientEvents = try await clientEventsTask.value
-        #expect(clientEvents.count == 4)
-        #expect("\(clientEvents)" == "[Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.close]")
+        // the client never writes, so it is never notified of write readiness
+        #expect(clientEvents.count == 3)
+        #expect("\(clientEvents)" == "[Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.close]")
         await server.close()
         let serverEvents = try await serverEventsTask.value
         #expect(serverEvents.count == 2)
         #expect("\(serverEvents)" == "[Socket.Socket.Event.connection, Socket.Socket.Event.close]")
         let newConnectionEvents = try await newConnectionTask.value
-        #expect(newConnectionEvents.count == 5)
-        #expect("\(newConnectionEvents)" == "[Socket.Socket.Event.write, Socket.Socket.Event.didWrite(41), Socket.Socket.Event.write, Socket.Socket.Event.read, Socket.Socket.Event.close]")
+        // write readiness is only reported for the pending write
+        #expect(newConnectionEvents.count == 4)
+        #expect("\(newConnectionEvents)" == "[Socket.Socket.Event.write, Socket.Socket.Event.didWrite(41), Socket.Socket.Event.read, Socket.Socket.Event.close]")
     }
     
     @Test("IPv4 UDP Socket Communication")
