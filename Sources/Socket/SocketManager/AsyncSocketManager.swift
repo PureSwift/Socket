@@ -59,10 +59,14 @@ internal actor AsyncSocketManager: SocketManager {
 
     fileprivate var eventQueue: PlatformEventQueue?
     
+    /// Events every socket is registered for.
+    ///
+    /// Write readiness is not included. A connected socket is almost always writable, so a
+    /// standing registration would make every wait return immediately for every idle socket.
+    /// It is added on demand while a write is pending, see ``addInterest(_:for:)``.
     fileprivate static let monitoredEvents: FileEvents = [
         .read,
         .readUrgent,
-        .write,
         .error,
         .hangup,
         .invalidRequest
@@ -86,6 +90,7 @@ internal actor AsyncSocketManager: SocketManager {
             log("Discard stale socket \(fileDescriptor)")
             discard(fileDescriptor)
         }
+        state.detached.remove(fileDescriptor)
         log("Add socket \(fileDescriptor)")
         // make sure its non blocking
         do {
@@ -105,6 +110,7 @@ internal actor AsyncSocketManager: SocketManager {
                 eventQueue = try PlatformEventQueue(maxEvents: 1024)
             }
             try eventQueue?.add(fileDescriptor, events: Self.monitoredEvents)
+            state.interests[fileDescriptor] = Self.monitoredEvents
         }
         catch {
             log("Unable to register socket for events. \(error)")
@@ -124,11 +130,14 @@ internal actor AsyncSocketManager: SocketManager {
     }
     
     func remove(_ fileDescriptor: SocketDescriptor) {
-        log("Remove socket \(fileDescriptor)")
-        // deregister before closing, a closed descriptor cannot be deregistered by number
-        discard(fileDescriptor)
-        // Close on behalf of the owner even when the state was already torn down by a
-        // hangup, the descriptor stays open until whoever created it asks to close.
+        if state.sockets[fileDescriptor] != nil {
+            log("Remove socket \(fileDescriptor)")
+            // deregister before closing, a closed descriptor cannot be deregistered by number
+            discard(fileDescriptor)
+        } else if state.detached.remove(fileDescriptor) == nil {
+            return // already closed by its owner
+        }
+        // close on behalf of the owner, including sockets left open by a hangup
         try? fileDescriptor.close()
     }
 
@@ -136,12 +145,17 @@ internal actor AsyncSocketManager: SocketManager {
     ///
     /// The manager never closes a descriptor it did not open. Closing one that the owner
     /// still holds lets the kernel hand the same number to a new socket, and a later
-    /// ``remove(_:)`` would then close that unrelated socket instead.
-    private func discard(_ fileDescriptor: SocketDescriptor) {
+    /// ``remove(_:)`` would then close that unrelated socket instead. A descriptor kept
+    /// open this way is recorded in `detached` so its owner can still close it once.
+    private func discard(_ fileDescriptor: SocketDescriptor, detach: Bool = false) {
         guard let socket = state.sockets[fileDescriptor] else {
             return
         }
+        if detach {
+            state.detached.insert(fileDescriptor)
+        }
         try? eventQueue?.remove(fileDescriptor)
+        state.interests[fileDescriptor] = nil
         // cancel all pending actions
         Task(priority: .userInitiated) {
             await socket.dequeueAll(Errno.connectionAbort)
@@ -298,7 +312,28 @@ private extension AsyncSocketManager {
     func contains(_ fileDescriptor: SocketDescriptor) -> Bool {
         return state.sockets.keys.contains(fileDescriptor)
     }
-    
+
+    /// Subscribe to additional events for a registered socket.
+    func addInterest(_ events: FileEvents, for fileDescriptor: SocketDescriptor) {
+        guard let current = state.interests[fileDescriptor] else { return }
+        setInterest(current.union(events), for: fileDescriptor)
+    }
+
+    /// Stop monitoring events that no longer have a pending operation.
+    func removeInterest(_ events: FileEvents, for fileDescriptor: SocketDescriptor) {
+        guard let current = state.interests[fileDescriptor] else { return }
+        setInterest(current.subtracting(events).union(Self.monitoredEvents), for: fileDescriptor)
+    }
+
+    private func setInterest(_ events: FileEvents, for fileDescriptor: SocketDescriptor) {
+        // skip the syscall when the mask is unchanged
+        guard state.interests[fileDescriptor] != events else { return }
+        state.interests[fileDescriptor] = events
+        do { try eventQueue?.update(fileDescriptor, events: events) }
+        catch { log("Unable to update events for \(fileDescriptor). \(error)") }
+    }
+
+
     nonisolated func wait(
         for events: FileEvents,
         fileDescriptor: SocketDescriptor
@@ -308,6 +343,8 @@ private extension AsyncSocketManager {
         guard await socket.pendingEvents.contains(events) == false else {
             return socket // execute immediately
         }
+        // subscribe to events that are not monitored by default, like write readiness
+        await addInterest(events, for: fileDescriptor)
         // store continuation to resume when event is polled
         try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Swift.Error>) -> () in
             // store pending continuation
@@ -358,6 +395,11 @@ private extension AsyncSocketManager {
             }
             if readiness.events.contains(.write) {
                 await socket.event(.write, notification: .write)
+                // unsubscribe once nothing is waiting to write, the socket stays
+                // writable and would otherwise report readiness on every wait
+                if await socket.isWaiting(for: .write) == false {
+                    removeInterest(.write, for: readiness.fileDescriptor)
+                }
             }
             if readiness.events.contains(.invalidRequest) {
                 error(.badFileDescriptor, for: readiness.fileDescriptor)
@@ -373,12 +415,12 @@ private extension AsyncSocketManager {
     
     func error(_ error: Errno, for fileDescriptor: SocketDescriptor) {
         state.sockets[fileDescriptor]?.continuation.yield(.error(error))
-        // stop monitoring but leave the descriptor open, see `discard(_:)`
-        discard(fileDescriptor)
+        // stop monitoring but leave the descriptor open, see `discard(_:detach:)`
+        discard(fileDescriptor, detach: true)
     }
 
     func hangup(_ fileDescriptor: SocketDescriptor) {
-        discard(fileDescriptor)
+        discard(fileDescriptor, detach: true)
     }
 }
  
@@ -485,6 +527,10 @@ fileprivate extension AsyncSocketManager.SocketState {
         }
     }
     
+    func isWaiting(for event: FileEvents) -> Bool {
+        eventContinuation[event, default: []].isEmpty == false
+    }
+
     func queue(_ event: FileEvents, _ continuation: SocketContinuation<(), Error>) {
         guard pendingEvents.contains(event) == false else {
             continuation.resume()
@@ -541,6 +587,12 @@ extension AsyncSocketManager {
         var configuration = AsyncSocketConfiguration()
         
         var sockets = [SocketDescriptor: SocketState]()
+
+        /// Events each socket is currently registered for.
+        var interests = [SocketDescriptor: FileEvents]()
+
+        /// Sockets no longer monitored whose descriptor is still open.
+        var detached = Set<SocketDescriptor>()
 
         var isMonitoring = false
     }
