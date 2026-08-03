@@ -17,7 +17,9 @@ jobs:
     - name: Build
       run: ${{ matrix.options }} swift build -c ${{ matrix.config }}
     - name: Test
-      run: ${{ matrix.options }} swift test -c ${{ matrix.config }}
+      # serially, sockets share the process file descriptor table and the idle
+      # benchmark measures CPU for the whole process
+      run: ${{ matrix.options }} swift test -c ${{ matrix.config }} --no-parallel
   
   linux:
     name: Linux
