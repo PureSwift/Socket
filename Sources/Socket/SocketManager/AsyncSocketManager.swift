@@ -225,6 +225,33 @@ internal actor AsyncSocketManager: SocketManager {
         return try await socket.receiveMessage(length, fromAddressOf: addressType)
     }
     
+    #if os(Linux) || os(Android) || canImport(Darwin)
+    /// Send a message carrying file descriptors as `SCM_RIGHTS` ancillary data.
+    nonisolated func sendMessage<T: DataProtocol>(
+        _ data: T,
+        fileDescriptors: [SocketDescriptor],
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> Int {
+        // Copied to a Sendable buffer before crossing into the actor, because DataProtocol
+        // carries no Sendable guarantee.
+        let bytes = [UInt8](data)
+        let socket = try await wait(for: .write, fileDescriptor: fileDescriptor)
+        await log("Will send message with \(bytes.count) bytes and \(fileDescriptors.count) file descriptors to \(fileDescriptor)")
+        return try await socket.sendMessage(bytes, fileDescriptors: fileDescriptors)
+    }
+    
+    /// Receive a message along with any `SCM_RIGHTS` file descriptors that accompany it.
+    nonisolated func receiveMessage(
+        _ length: Int,
+        maximumDescriptors: Int,
+        for fileDescriptor: SocketDescriptor
+    ) async throws -> SocketMessage {
+        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
+        await log("Will receive message with \(length) bytes and up to \(maximumDescriptors) file descriptors from \(fileDescriptor)")
+        return try await socket.receiveMessage(length, maximumDescriptors: maximumDescriptors)
+    }
+    #endif
+    
     nonisolated func listen(backlog: Int, for fileDescriptor: SocketDescriptor) async throws {
         let socket = try await self.socket(for: fileDescriptor)
         try await socket.listen(backlog: backlog)
@@ -254,6 +281,7 @@ internal actor AsyncSocketManager: SocketManager {
         try await retry(sleep: state.configuration.monitorInterval) {
             fileDescriptor._connect(to: address, retryOnInterrupt: true)
         }.get()
+        await socket.markEstablished()
         socket.continuation.yield(.connection)
     }
 }
@@ -401,14 +429,22 @@ private extension AsyncSocketManager {
                     removeInterest(.write, for: readiness.fileDescriptor)
                 }
             }
+            // These tear the socket down, so they must not be applied to a different socket
+            // that has since been given the same file descriptor number.
             if readiness.events.contains(.invalidRequest) {
-                error(.badFileDescriptor, for: readiness.fileDescriptor)
+                error(.badFileDescriptor, for: readiness.fileDescriptor, socket: socket)
             }
             if readiness.events.contains(.error) {
-                error(.connectionReset, for: readiness.fileDescriptor)
+                error(.connectionReset, for: readiness.fileDescriptor, socket: socket)
             }
+            // A socket that has not yet been connected polls as POLLHUP, so acting on it here
+            // would tear down a socket that is only moments away from being connected.
             if readiness.events.contains(.hangup) {
-                hangup(readiness.fileDescriptor)
+                let isEstablished = await socket.isEstablished
+                let isListening = await socket.isListening
+                if isEstablished || isListening {
+                    hangup(readiness.fileDescriptor, socket: socket)
+                }
             }
         }
     }
@@ -422,9 +458,49 @@ private extension AsyncSocketManager {
     func hangup(_ fileDescriptor: SocketDescriptor) {
         discard(fileDescriptor, detach: true)
     }
+    
+    /// Report an error for a socket, provided the descriptor still refers to it.
+    ///
+    /// Poll results are acted on from a task that runs after polling, by which time the
+    /// descriptor may have been closed and its number reused by a new socket. Without this
+    /// check the new socket would be torn down, and its first operation would fail with
+    /// `ESHUTDOWN` from `socket(for:)`.
+    func error(_ error: Errno, for fileDescriptor: SocketDescriptor, socket: SocketState) {
+        guard isCurrent(socket, for: fileDescriptor) else { return }
+        self.error(error, for: fileDescriptor)
+    }
+    
+    /// Hang up a socket, provided the descriptor still refers to it.
+    func hangup(_ fileDescriptor: SocketDescriptor, socket: SocketState) {
+        guard isCurrent(socket, for: fileDescriptor) else { return }
+        hangup(fileDescriptor)
+    }
+    
+    /// Whether the descriptor is still registered to this very socket, rather than to a newer
+    /// one that reused the number.
+    func isCurrent(_ socket: SocketState, for fileDescriptor: SocketDescriptor) -> Bool {
+        guard let current = state.sockets[fileDescriptor] else { return false }
+        return current === socket
+    }
 }
  
 extension AsyncSocketManager.SocketState {
+    
+    #if os(Linux) || os(Android) || canImport(Darwin)
+    func sendMessage(_ data: [UInt8], fileDescriptors: [SocketDescriptor]) throws -> Int {
+        let byteCount = try fileDescriptor.send(data, fileDescriptors: fileDescriptors)
+        // notify
+        didWrite(byteCount)
+        return byteCount
+    }
+    
+    func receiveMessage(_ length: Int, maximumDescriptors: Int) throws -> SocketMessage {
+        let message = try fileDescriptor.receive(length, maximumDescriptors: maximumDescriptors)
+        // notify
+        didRead(message.data.count)
+        return message
+    }
+    #endif
     
     func write(_ data: Data) throws -> Int {
         let byteCount = try data.withUnsafeBytes {
@@ -495,6 +571,7 @@ extension AsyncSocketManager.SocketState {
     func listen(backlog: Int) throws {
         try fileDescriptor.listen(backlog: backlog)
         isListening = true
+        isEstablished = true
     }
     
     func accept() throws -> SocketDescriptor {
@@ -509,13 +586,20 @@ extension AsyncSocketManager.SocketState {
 fileprivate extension AsyncSocketManager.SocketState {
     
     func didRead(_ bytes: Int) {
+        isEstablished = true
         pendingEvents.remove(.read)
         continuation.yield(.didRead(bytes))
     }
     
     func didWrite(_ bytes: Int) {
+        isEstablished = true
         pendingEvents.remove(.write)
         continuation.yield(.didWrite(bytes))
+    }
+    
+    /// Record that the socket is connected, so a hangup on it is meaningful.
+    func markEstablished() {
+        isEstablished = true
     }
     
     func dequeueAll(_ error: Error) {
@@ -610,6 +694,12 @@ extension AsyncSocketManager {
         var eventContinuation = [FileEvents: [SocketContinuation<(), Error>]]()
         
         var isListening = false
+        
+        /// Whether the socket has been connected, or has completed any I/O.
+        ///
+        /// A socket that has never been connected polls as POLLHUP on Linux, so a hangup can
+        /// only be believed once the socket has actually been established.
+        var isEstablished = false
         
         init(
             fileDescriptor: SocketDescriptor,
