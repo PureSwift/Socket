@@ -64,7 +64,7 @@ internal actor AsyncSocketManager: SocketManager {
     /// Write readiness is not included. A connected socket is almost always writable, so a
     /// standing registration would make every wait return immediately for every idle socket.
     /// It is added on demand while a write is pending, see ``addInterest(_:for:)``.
-    fileprivate static let monitoredEvents: FileEvents = [
+    internal static let monitoredEvents: FileEvents = [
         .read,
         .readUrgent,
         .error,
