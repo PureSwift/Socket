@@ -124,17 +124,19 @@ internal actor AsyncSocketManager: SocketManager {
     }
     
     func remove(_ fileDescriptor: SocketDescriptor) {
-        guard state.sockets[fileDescriptor] != nil else {
-            return // could have been removed previously
-        }
         log("Remove socket \(fileDescriptor)")
         // deregister before closing, a closed descriptor cannot be deregistered by number
         discard(fileDescriptor)
-        // close underlying socket
+        // Close on behalf of the owner even when the state was already torn down by a
+        // hangup, the descriptor stays open until whoever created it asks to close.
         try? fileDescriptor.close()
     }
 
     /// Deregister a file descriptor and tear down its state without closing it.
+    ///
+    /// The manager never closes a descriptor it did not open. Closing one that the owner
+    /// still holds lets the kernel hand the same number to a new socket, and a later
+    /// ``remove(_:)`` would then close that unrelated socket instead.
     private func discard(_ fileDescriptor: SocketDescriptor) {
         guard let socket = state.sockets[fileDescriptor] else {
             return
@@ -371,11 +373,12 @@ private extension AsyncSocketManager {
     
     func error(_ error: Errno, for fileDescriptor: SocketDescriptor) {
         state.sockets[fileDescriptor]?.continuation.yield(.error(error))
-        remove(fileDescriptor)
+        // stop monitoring but leave the descriptor open, see `discard(_:)`
+        discard(fileDescriptor)
     }
-    
+
     func hangup(_ fileDescriptor: SocketDescriptor) {
-        remove(fileDescriptor)
+        discard(fileDescriptor)
     }
 }
  
