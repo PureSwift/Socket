@@ -164,6 +164,41 @@ internal var _POLLHUP: CInt { POLLHUP }
 @_alwaysEmitIntoClient
 internal var _POLLNVAL: CInt { POLLNVAL }
 
+#if os(Linux) || os(Android)
+// epoll constants are part of the stable Linux kernel ABI and are hardcoded
+// because Glibc, Musl and Bionic import them with different Swift types.
+
+@_alwaysEmitIntoClient
+internal var _EPOLLIN: UInt32 { 0x001 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLLPRI: UInt32 { 0x002 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLLOUT: UInt32 { 0x004 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLLERR: UInt32 { 0x008 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLLHUP: UInt32 { 0x010 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLLRDHUP: UInt32 { 0x2000 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLL_CTL_ADD: CInt { 1 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLL_CTL_DEL: CInt { 2 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLL_CTL_MOD: CInt { 3 }
+
+@_alwaysEmitIntoClient
+internal var _EPOLL_CLOEXEC: CInt { 0o2000000 }
+#endif
+
 @_alwaysEmitIntoClient
 internal var _INET_ADDRSTRLEN: CInt { INET_ADDRSTRLEN }
 
