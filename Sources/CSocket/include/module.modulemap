@@ -3,5 +3,6 @@ module CSocket {
   header "CSystemWASI.h"
   header "CSystemWindows.h"
   header "CSystemAndroid.h"
+  header "CSocketAncillary.h"
   export *
 }
