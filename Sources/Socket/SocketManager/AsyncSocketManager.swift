@@ -79,8 +79,12 @@ internal actor AsyncSocketManager: SocketManager {
     func add(
         _ fileDescriptor: SocketDescriptor
     ) -> Socket.Event.Stream {
-        guard state.sockets.keys.contains(fileDescriptor) == false else {
-            fatalError("Another socket for file descriptor \(fileDescriptor) already exists.")
+        // The kernel only hands back a descriptor number once the previous owner is gone,
+        // so any existing entry belongs to a socket that was closed without notifying us.
+        // Kernel event queues drop closed descriptors silently, unlike `poll(2)` reporting `POLLNVAL`.
+        if state.sockets.keys.contains(fileDescriptor) {
+            log("Discard stale socket \(fileDescriptor)")
+            discard(fileDescriptor)
         }
         log("Add socket \(fileDescriptor)")
         // make sure its non blocking
@@ -120,14 +124,22 @@ internal actor AsyncSocketManager: SocketManager {
     }
     
     func remove(_ fileDescriptor: SocketDescriptor) {
-        guard let socket = state.sockets[fileDescriptor] else {
+        guard state.sockets[fileDescriptor] != nil else {
             return // could have been removed previously
         }
         log("Remove socket \(fileDescriptor)")
-        // deregister from event queue before closing
-        try? eventQueue?.remove(fileDescriptor)
+        // deregister before closing, a closed descriptor cannot be deregistered by number
+        discard(fileDescriptor)
         // close underlying socket
         try? fileDescriptor.close()
+    }
+
+    /// Deregister a file descriptor and tear down its state without closing it.
+    private func discard(_ fileDescriptor: SocketDescriptor) {
+        guard let socket = state.sockets[fileDescriptor] else {
+            return
+        }
+        try? eventQueue?.remove(fileDescriptor)
         // cancel all pending actions
         Task(priority: .userInitiated) {
             await socket.dequeueAll(Errno.connectionAbort)
