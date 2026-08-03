@@ -70,16 +70,16 @@ struct IdleTests {
     }
 
     /// Sized to stay well inside the open file limit.
-    static var socketPairCount: Int {
-        var limit = rlimit()
-        guard getrlimit(RLIMIT_NOFILE, &limit) == 0 else { return 32 }
-        let available = (Int(limit.rlim_cur) - 128) / 2
-        return max(8, min(200, available))
-    }
+    static let socketPairCount = 100
 
     static func cpuSeconds() -> Double {
         var usage = rusage()
+        #if canImport(Glibc)
+        // Glibc imports the constant as an enum
+        getrusage(__rusage_who_t(RUSAGE_SELF.rawValue), &usage)
+        #else
         getrusage(RUSAGE_SELF, &usage)
+        #endif
         let user = Double(usage.ru_utime.tv_sec) + Double(usage.ru_utime.tv_usec) / 1_000_000
         let system = Double(usage.ru_stime.tv_sec) + Double(usage.ru_stime.tv_usec) / 1_000_000
         return user + system
