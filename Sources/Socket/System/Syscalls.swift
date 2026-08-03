@@ -384,6 +384,62 @@ internal func system_recvmsg(
   return recvmsg(socket, message, flags)
 }
 
+#if canImport(Darwin)
+internal func system_kqueue() -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock() }
+#endif
+  return kqueue()
+}
+
+internal func system_kevent(
+  _ kq: CInt,
+  _ changes: UnsafePointer<CInterop.KernelEvent>?,
+  _ changeCount: CInt,
+  _ events: UnsafeMutablePointer<CInterop.KernelEvent>?,
+  _ eventCount: CInt,
+  _ timeout: UnsafePointer<timespec>?
+) -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(kq, changes, changeCount, events, eventCount, timeout) }
+#endif
+  return kevent(kq, changes, changeCount, events, eventCount, timeout)
+}
+#endif
+
+#if os(Linux) || os(Android)
+internal func system_epoll_create1(_ flags: CInt) -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(flags) }
+#endif
+  return epoll_create1(flags)
+}
+
+internal func system_epoll_ctl(
+  _ epoll: CInt,
+  _ operation: CInt,
+  _ fd: CInt,
+  _ event: UnsafeMutablePointer<CInterop.EPollEvent>?
+) -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(epoll, operation, fd, event) }
+#endif
+  return epoll_ctl(epoll, operation, fd, event)
+}
+
+internal func system_epoll_wait(
+  _ epoll: CInt,
+  _ events: UnsafeMutablePointer<CInterop.EPollEvent>,
+  _ maxEvents: CInt,
+  _ timeout: CInt
+) -> CInt {
+#if ENABLE_MOCKING
+  if mockingEnabled { return _mock(epoll, events, maxEvents, timeout) }
+#endif
+  return epoll_wait(epoll, events, maxEvents, timeout)
+}
+#endif
+
 #if os(Linux) || os(Android)
 internal func system_eventfd(
   _ initval: CUnsignedInt,
