@@ -36,7 +36,10 @@ struct EventQueueTests {
         defer { try? client.close() }
         try client.connect(to: address)
         let server = try listener.accept()
-        defer { try? server.close() }
+        // closed explicitly below to observe end of file, a second close would
+        // reap a descriptor number the kernel has since handed to another test
+        var isServerClosed = false
+        defer { if isServerClosed == false { try? server.close() } }
 
         var queue = try Queue(maxEvents: 16)
         defer { queue.close() }
@@ -75,6 +78,7 @@ struct EventQueueTests {
 
         // peer close surfaces read readiness for end-of-file
         try server.close()
+        isServerClosed = true
         events = try Self.events(for: client, in: &queue, timeout: 1000)
         #expect(events?.contains(.read) == true)
 
