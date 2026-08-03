@@ -37,6 +37,8 @@ jobs:
       run: swift --version
     - name: Build
       run: ${{ matrix.options }} swift build -c ${{ matrix.config }}
+    - name: Test
+      run: ${{ matrix.options }} swift test -c ${{ matrix.config }} --no-parallel
 
   android-arm:
       name: Android
