@@ -52,7 +52,7 @@ private func mockImpl(
   }
   var mockArgs: Array<AnyHashable> = []
   if let p = path {
-    mockArgs.append(String(_errorCorrectingPlatformString: p))
+    mockArgs.append(String(validatingPlatformString: p) ?? "")
   }
   mockArgs.append(contentsOf: args)
   driver.trace.add(Trace.Entry(name: origName, mockArgs))
@@ -522,7 +522,10 @@ internal func system_ioctl(
 // if_nameindex
 internal func system_if_nameindex() -> UnsafeMutablePointer<CInterop.InterfaceNameIndex>? {
 #if ENABLE_MOCKING
-  if mockingEnabled { return _mock() }
+  if mockingEnabled {
+    _ = _mock()
+    return nil
+  }
 #endif
     return if_nameindex()
 }
@@ -530,7 +533,10 @@ internal func system_if_nameindex() -> UnsafeMutablePointer<CInterop.InterfaceNa
 // if_nameindex
 internal func system_if_freenameindex(_ pointer: UnsafeMutablePointer<CInterop.InterfaceNameIndex>?) {
 #if ENABLE_MOCKING
-  if mockingEnabled { return _mock(pointer) }
+  if mockingEnabled {
+    _ = _mock(pointer)
+    return
+  }
 #endif
     return if_freenameindex(pointer)
 }
@@ -544,7 +550,10 @@ internal func system_getifaddrs(_ pointer: UnsafeMutablePointer<UnsafeMutablePoi
 
 internal func system_freeifaddrs(_ pointer: UnsafeMutablePointer<CInterop.InterfaceLinkedList>?) {
 #if ENABLE_MOCKING
-    if mockingEnabled { return _mock(pointer) }
+    if mockingEnabled {
+      _ = _mock(pointer)
+      return
+    }
 #endif
     return freeifaddrs(pointer)
 }
@@ -552,14 +561,18 @@ internal func system_freeifaddrs(_ pointer: UnsafeMutablePointer<CInterop.Interf
 #if canImport(Darwin)
 internal func system_link_addr(_ cString: UnsafePointer<CChar>, _ address: UnsafeMutablePointer<sockaddr_dl>) {
 #if ENABLE_MOCKING
-    if mockingEnabled { return _mock(cString) }
+    if mockingEnabled {
+      _ = _mock(cString)
+      return
+    }
 #endif
     return link_addr(cString, address)
 }
 
 internal func system_link_ntoa(_ address: UnsafePointer<sockaddr_dl>) -> UnsafeMutablePointer<CChar> {
 #if ENABLE_MOCKING
-    if mockingEnabled { return _mock(cString) }
+    // records the call but still formats, there is no value to fabricate
+    if mockingEnabled { _ = _mock(address) }
 #endif
     return link_ntoa(address)
 }
