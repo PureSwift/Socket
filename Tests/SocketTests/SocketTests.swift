@@ -134,16 +134,22 @@ struct SocketTests {
             address: .any,
             port: port
         )
+        // datagrams are sent to loopback, `.any` is not a destination address
+        let serverAddress = IPv4SocketAddress(
+            address: .loopback,
+            port: port
+        )
         let data = Data("Test \(UUID())".utf8)
-        
+
+        // bind before sending, a datagram to an unbound port is dropped
+        let server = try await Socket(
+            IPv4Protocol.udp,
+            bind: address
+        )
+        Self.logger.info("Server: Created server socket \(server.fileDescriptor)")
+
         Task {
-            let server = try await Socket(
-                IPv4Protocol.udp,
-                bind: address
-            )
             defer { Task { await server.close() } }
-            Self.logger.info("Server: Created server socket \(server.fileDescriptor)")
-            
             do {
                 Self.logger.info("Server: Waiting to receive incoming message")
                 let (read, clientAddress) = try await server.receiveMessage(data.count, fromAddressOf: type(of: address))
@@ -166,7 +172,7 @@ struct SocketTests {
         Self.logger.info("Client: Created client socket \(client.fileDescriptor)")
         
         Self.logger.info("Client: Waiting to send outgoing message")
-        try await client.sendMessage(data, to: address)
+        try await client.sendMessage(data, to: serverAddress)
         Self.logger.info("Client: Sent outgoing message")
         
         Self.logger.info("Client: Waiting to receive incoming message")
