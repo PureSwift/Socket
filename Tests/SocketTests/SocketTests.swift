@@ -63,11 +63,11 @@ struct SocketTests {
         let serverAddress = try server.fileDescriptor.address(IPv4SocketAddress.self)
         Self.logger.info("Using port \(serverAddress.port)")
         let destination = IPv4SocketAddress(address: .loopback, port: serverAddress.port)
+        #expect(serverAddress.port != 0)
+        Self.logger.info("Server: Created server socket \(server.fileDescriptor)")
+        // listen before the client connects, otherwise the connection is refused
+        try await server.listen()
         let newConnectionTask = Task {
-            #expect(try server.fileDescriptor.address(IPv4SocketAddress.self).port != 0)
-            Self.logger.info("Server: Created server socket \(server.fileDescriptor)")
-            try await server.listen()
-            
             Self.logger.info("Server: Waiting on incoming connection")
             let newConnection = try await server.accept()
             Self.logger.info("Server: Got incoming connection \(newConnection.fileDescriptor)")
