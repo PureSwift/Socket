@@ -49,11 +49,7 @@ struct IdleTests {
         for fileDescriptor in pairs.sockets {
             sockets.append(await Socket(fileDescriptor: fileDescriptor))
         }
-        defer {
-            let managed = sockets
-            Task { for socket in managed { await socket.close() } }
-            pairs.closeListener()
-        }
+
         // let registration settle before measuring
         try await Task.sleep(nanoseconds: 500_000_000)
 
@@ -67,6 +63,12 @@ struct IdleTests {
             perSocketSecond < Self.budget,
             "Idle CPU \(perSocketSecond)µs per socket second exceeds budget of \(Self.budget)µs"
         )
+
+        // close before returning so the next test starts from a clean table
+        for socket in sockets {
+            await socket.close()
+        }
+        pairs.closeListener()
     }
 
     /// Sized to stay well inside the open file limit.
