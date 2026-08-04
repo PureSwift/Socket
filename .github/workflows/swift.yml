@@ -49,7 +49,7 @@ jobs:
       strategy:
         fail-fast: false
         matrix:
-          swift: ['6.2.3', 'nightly-6.3']
+          swift: ['6.3.3']
           arch: ['aarch64', 'x86_64', 'armv7']
       runs-on: macos-15
       timeout-minutes: 30
