@@ -4,7 +4,8 @@ import SystemPackage
 import Logging
 @testable import Socket
 
-@Suite("Socket Tests")
+// a socket test that blocks forever should fail, not run out the job timeout
+@Suite("Socket Tests", .timeLimit(.minutes(1)))
 struct SocketTests {
     
     static let logger = Logger(label: "logger") { label in
@@ -83,6 +84,10 @@ struct SocketTests {
             try await Task.sleep(nanoseconds: 10_000_000)
             let _ = try await newConnection.write(data)
             Self.logger.info("Server: Wrote outgoing data")
+            // close once the client is done, waiting on the peer to disconnect
+            // only ends the stream on platforms that report end of file as a hangup
+            try await Task.sleep(nanoseconds: 2_500_000_000)
+            await newConnection.close()
             return try await eventsTask.value
         }
         let serverEventsTask = Task {
