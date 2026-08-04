@@ -5,7 +5,9 @@ jobs:
   macos:
     name: macOS
     runs-on: macos-15
+    timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
         config: ["debug", "release"]
         options: ["", "SWIFT_BUILD_DYNAMIC_LIBRARY=1"]
@@ -17,16 +19,20 @@ jobs:
     - name: Build
       run: ${{ matrix.options }} swift build -c ${{ matrix.config }}
     - name: Test
-      run: ${{ matrix.options }} swift test -c ${{ matrix.config }}
+      # serially, sockets share the process file descriptor table and the idle
+      # benchmark measures CPU for the whole process
+      run: ${{ matrix.options }} swift test -c ${{ matrix.config }} --no-parallel
   
   linux:
     name: Linux
     strategy:
+      fail-fast: false
       matrix:
         container: ["swift:6.0.3", "swift:6.1.2", "swift:6.2.3"]
         config: ["debug", "release"]
         options: ["", "SWIFT_BUILD_DYNAMIC_LIBRARY=1"]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container: ${{ matrix.container }}-jammy
     steps:
     - name: Checkout
@@ -35,13 +41,15 @@ jobs:
       run: swift --version
     - name: Build
       run: ${{ matrix.options }} swift build -c ${{ matrix.config }}
+    - name: Test
+      run: ${{ matrix.options }} swift test -c ${{ matrix.config }} --no-parallel
 
   android-arm:
       name: Android
       strategy:
         fail-fast: false
         matrix:
-          swift: ['6.2.3', 'nightly-6.3']
+          swift: ['6.3.3']
           arch: ['aarch64', 'x86_64', 'armv7']
       runs-on: macos-15
       timeout-minutes: 30

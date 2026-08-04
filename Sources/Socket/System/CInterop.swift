@@ -94,4 +94,12 @@ public extension CInterop {
     typealias InterfaceLinkedList = ifaddrs
     
     typealias IOControlID = CUnsignedLong
+
+    #if canImport(Darwin)
+    /// The C `kevent` type
+    typealias KernelEvent = Darwin.kevent
+    #elseif os(Linux) || os(Android)
+    /// The C `epoll_event` type
+    typealias EPollEvent = epoll_event
+    #endif
 }

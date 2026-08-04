@@ -40,6 +40,9 @@ var package = Package(
                     name: "SystemPackage",
                     package: "swift-system"
                 ),
+            ],
+            swiftSettings: [
+                .define("ENABLE_MOCKING", .when(configuration: .debug))
             ]
         ),
         .target(
@@ -53,6 +56,9 @@ var package = Package(
                     name: "Logging",
                     package: "swift-log"
                 )
+            ],
+            swiftSettings: [
+                .define("ENABLE_MOCKING", .when(configuration: .debug))
             ]
         )
     ]
