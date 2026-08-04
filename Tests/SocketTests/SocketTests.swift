@@ -16,30 +16,35 @@ struct SocketTests {
     #if os(Linux)
     @Test("Unix Socket Communication")
     func testUnixSocket() async throws {
-        let address = UnixSocketAddress(path: FilePath("/tmp/testsocket.sock"))
-        Self.logger.info("Using path \(address.path.description)")
+        // each socket needs its own path, a bound path cannot be shared,
+        // and a unique name avoids colliding with a file left by an earlier run
+        let name = UUID().uuidString.prefix(8)
+        let addressA = UnixSocketAddress(path: FilePath("/tmp/testsocket-a-\(name).sock"))
+        let addressB = UnixSocketAddress(path: FilePath("/tmp/testsocket-b-\(name).sock"))
+        Self.logger.info("Using paths \(addressA.path.description) and \(addressB.path.description)")
+        defer {
+            try? FileManager.default.removeItem(atPath: addressA.path.description)
+            try? FileManager.default.removeItem(atPath: addressB.path.description)
+        }
         let socketA = try await Socket(
             UnixProtocol.raw
         )
         Self.logger.info("Created socket A")
-        let option: GenericSocketOption.ReuseAddress = true
-        try socketA.fileDescriptor.setSocketOption(option)
-        do { try socketA.fileDescriptor.bind(address) }
-        catch { }
+        try socketA.fileDescriptor.bind(addressA)
         defer { Task { await socketA.close() } }
-        
+
         let socketB = try await Socket(
             UnixProtocol.raw
         )
         Self.logger.info("Created socket B")
-        try socketB.fileDescriptor.setSocketOption(option)
-        try socketB.fileDescriptor.bind(address)
+        try socketB.fileDescriptor.bind(addressB)
         defer { Task { await socketB.close() } }
-        
+
         let data = Data("Test \(UUID())".utf8)
-        
-        try await socketA.write(data)
-        Self.logger.info("Socket A wrote data")
+
+        // unconnected datagram sockets must name their destination
+        try await socketA.sendMessage(data, to: addressB)
+        Self.logger.info("Socket A sent data")
         let read = try await socketB.read(data.count)
         Self.logger.info("Socket B read data")
         #expect(data == read)
@@ -48,16 +53,18 @@ struct SocketTests {
     
     @Test("IPv4 TCP Socket Communication")
     func testIPv4TCPSocket() async throws {
-        let port = UInt16.random(in: 8080 ..< .max)
-        Self.logger.info("Using port \(port)")
-        let address = IPv4SocketAddress(address: .any, port: port)
+        // let the kernel assign a free port, a hardcoded one may already be taken
+        let address = IPv4SocketAddress(address: .any, port: 0)
         let data = Data("Test \(UUID())".utf8)
         let server = try await Socket(
             IPv4Protocol.tcp,
             bind: address
         )
+        let serverAddress = try server.fileDescriptor.address(IPv4SocketAddress.self)
+        Self.logger.info("Using port \(serverAddress.port)")
+        let destination = IPv4SocketAddress(address: .loopback, port: serverAddress.port)
         let newConnectionTask = Task {
-            #expect(try server.fileDescriptor.address(IPv4SocketAddress.self) == address)
+            #expect(try server.fileDescriptor.address(IPv4SocketAddress.self).port != 0)
             Self.logger.info("Server: Created server socket \(server.fileDescriptor)")
             try await server.listen()
             
@@ -102,7 +109,7 @@ struct SocketTests {
         Self.logger.info("Client: Created client socket \(client.fileDescriptor)")
         
         Self.logger.info("Client: Will connect to server")
-        do { try await client.connect(to: address) }
+        do { try await client.connect(to: destination) }
         catch Errno.socketIsConnected { }
         Self.logger.info("Client: Connected to server")
         #expect(try client.fileDescriptor.address(IPv4SocketAddress.self).address.rawValue == "127.0.0.1")
@@ -128,16 +135,10 @@ struct SocketTests {
     
     @Test("IPv4 UDP Socket Communication")
     func testIPv4UDPSocket() async throws {
-        let port = UInt16.random(in: 8080 ..< .max)
-        Self.logger.info("Using port \(port)")
+        // let the kernel assign a free port, a hardcoded one may already be taken
         let address = IPv4SocketAddress(
             address: .any,
-            port: port
-        )
-        // datagrams are sent to loopback, `.any` is not a destination address
-        let serverAddress = IPv4SocketAddress(
-            address: .loopback,
-            port: port
+            port: 0
         )
         let data = Data("Test \(UUID())".utf8)
 
@@ -146,7 +147,13 @@ struct SocketTests {
             IPv4Protocol.udp,
             bind: address
         )
-        Self.logger.info("Server: Created server socket \(server.fileDescriptor)")
+        // datagrams are sent to loopback, `.any` is not a destination address
+        let boundPort = try server.fileDescriptor.address(IPv4SocketAddress.self).port
+        let serverAddress = IPv4SocketAddress(
+            address: .loopback,
+            port: boundPort
+        )
+        Self.logger.info("Server: Created server socket \(server.fileDescriptor) on port \(boundPort)")
 
         Task {
             defer { Task { await server.close() } }
