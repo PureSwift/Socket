@@ -5,6 +5,7 @@ jobs:
   macos:
     name: macOS
     runs-on: macos-15
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +32,7 @@ jobs:
         config: ["debug", "release"]
         options: ["", "SWIFT_BUILD_DYNAMIC_LIBRARY=1"]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container: ${{ matrix.container }}-jammy
     steps:
     - name: Checkout
