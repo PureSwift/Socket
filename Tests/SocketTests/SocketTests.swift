@@ -124,7 +124,11 @@ struct SocketTests {
         #expect(data == read)
         try await Task.sleep(nanoseconds: 2_000_000_000)
         await client.close()
-        let clientEvents = try await clientEventsTask.value
+        // the connect notification races the single element buffer, it is
+        // replaced by the next event when the consumer has not read it yet
+        let clientEvents = try await clientEventsTask.value.filter {
+            if case .connection = $0 { return false } else { return true }
+        }
         // the client never writes, so it is never notified of write readiness
         #expect(clientEvents.count == 3)
         #expect("\(clientEvents)" == "[Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.close]")
