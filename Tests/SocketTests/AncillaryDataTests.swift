@@ -29,7 +29,14 @@ struct AncillaryDataTests {
         var descriptors: [CInt] = [-1, -1]
 
         let result = descriptors.withUnsafeMutableBufferPointer { pointer in
-            socketpair(AF_UNIX, CInt(SOCK_STREAM.rawValue), 0, pointer.baseAddress)
+            // the library's own constants, because SOCK_STREAM is an enum on Glibc
+            // and a plain CInt on Darwin
+            socketpair(
+                SocketAddressFamily.unix.rawValue,
+                SocketType.stream.rawValue,
+                0,
+                pointer.baseAddress
+            )
         }
 
         guard result == 0
