@@ -10,18 +10,9 @@
 import Foundation
 import SystemPackage
 
-#if canImport(Glibc)
+// only the C shims are needed, because the CMSG_* accessors are macros, and unlike the
+// other syscall wrappers they are used on Darwin as well as Linux and Android
 import CSocket
-import Glibc
-#elseif canImport(Musl)
-import CSocket
-import Musl
-#elseif canImport(Bionic)
-import CSocket
-import Bionic
-#elseif canImport(Darwin)
-import Darwin
-#endif
 
 /// A message received together with any file descriptors that accompanied it.
 public struct SocketMessage: Equatable, Hashable, Sendable {
@@ -100,7 +91,7 @@ public extension SocketDescriptor {
             }
         }
 
-        return result == -1 ? .failure(Errno(rawValue: errno)) : .success(Int(result))
+        return result == -1 ? .failure(.current) : .success(Int(result))
     }
 
     /// Receive a message along with any `SCM_RIGHTS` file descriptors that accompany it.
@@ -150,7 +141,7 @@ public extension SocketDescriptor {
         }
 
         guard result >= 0
-            else { return .failure(Errno(rawValue: errno)) }
+            else { return .failure(.current) }
 
         let descriptors = rawDescriptors
             .prefix(receivedCount)
