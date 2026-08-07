@@ -8,7 +8,7 @@ jobs:
       strategy:
         matrix:
           config: ["debug" , "release"]
-          swift: ["6.1.2"]
+          swift: ["6.2.3", "6.3.3"]
           linux: ["raspios"]
           release: ["bookworm"]
           arch: ["armv6", "armv7"]
@@ -34,7 +34,7 @@ jobs:
       strategy:
         matrix:
           config: ["debug" , "release"]
-          swift: ["6.1.2"]
+          swift: ["6.2.3", "6.3.3"]
           linux: ["debian"]
           release: ["bookworm", "bullseye"]
           arch: ["armv7"]
@@ -64,7 +64,7 @@ jobs:
       runs-on: ubuntu-latest
       strategy:
         matrix:
-          swift: ["6.0.3"]
+          swift: ["6.2.3", "6.3.3"]
       container: swift:${{ matrix.swift }}
       steps:
         - name: Checkout
