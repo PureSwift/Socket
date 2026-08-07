@@ -50,13 +50,10 @@ public extension NetworkInterface {
                     assertionFailure("Unknown interface \(interfaceName)")
                     continue
                 }
-                #if os(Android)
+                // an interface with no address, such as a tunnel, has a null ifa_addr
                 guard let sa_family = value.ifa_addr?.pointee.sa_family else {
                     continue
                 }
-                #else
-                let sa_family = value.ifa_addr.pointee.sa_family
-                #endif
                 guard Address.family.rawValue == sa_family else {
                     continue // incompatible address type
                 }
