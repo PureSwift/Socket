@@ -470,10 +470,31 @@ private extension AsyncSocketManager {
         self.error(error, for: fileDescriptor)
     }
     
-    /// Hang up a socket, provided the descriptor still refers to it.
+    /// Hang up a socket, provided the descriptor still refers to it and still reports a hangup.
     func hangup(_ fileDescriptor: SocketDescriptor, socket: SocketState) {
         guard isCurrent(socket, for: fileDescriptor) else { return }
+        guard stillHangsUp(fileDescriptor) else { return }
         hangup(fileDescriptor)
+    }
+
+    /// Whether the descriptor reports a hangup *now*, rather than when it was last polled.
+    ///
+    /// An unconnected socket reports `POLLHUP`, and poll results are acted on from a task that
+    /// runs after polling. A socket polled while `connect` was still in flight is therefore
+    /// established by the time its result is processed, so checking the established flag alone
+    /// cannot tell that stale event apart from a real peer hangup — and acting on it tears down
+    /// a healthy connection, whose next operation then fails with `ESHUTDOWN` or `ECONNABORTED`.
+    ///
+    /// `POLLHUP` is level triggered, so a genuine hangup is still reported here and is acted on
+    /// as before; only the stale observation is filtered out.
+    func stillHangsUp(_ fileDescriptor: SocketDescriptor) -> Bool {
+        // `.hangup` need not be requested: poll always reports it in `revents`.
+        guard let events = try? fileDescriptor._poll(
+            events: [],
+            timeout: 0,
+            retryOnInterrupt: true
+        ).get() else { return false }
+        return events.contains(.hangup)
     }
     
     /// Whether the descriptor is still registered to this very socket, rather than to a newer
@@ -603,6 +624,8 @@ fileprivate extension AsyncSocketManager.SocketState {
     }
     
     func dequeueAll(_ error: Error) {
+        // resume any waiter that arrives after this point, rather than leaving it queued forever
+        terminationError = error
         // cancel all continuations
         for event in eventContinuation.keys {
             while let continuation = dequeue(event) {
@@ -616,6 +639,11 @@ fileprivate extension AsyncSocketManager.SocketState {
     }
 
     func queue(_ event: FileEvents, _ continuation: SocketContinuation<(), Error>) {
+        // the socket was torn down while this waiter was on its way here
+        if let terminationError {
+            continuation.resume(throwing: terminationError)
+            return
+        }
         guard pendingEvents.contains(event) == false else {
             continuation.resume()
             return
@@ -700,7 +728,16 @@ extension AsyncSocketManager {
         /// A socket that has never been connected polls as POLLHUP on Linux, so a hangup can
         /// only be believed once the socket has actually been established.
         var isEstablished = false
-        
+
+        /// The error to resume any further waiter with, once the socket has been torn down.
+        ///
+        /// ``AsyncSocketManager/wait(for:fileDescriptor:)`` registers its continuation from a
+        /// separate task, so a waiter can arrive *after* ``dequeueAll(_:)`` has already drained
+        /// the queue. Recording the teardown lets that late arrival be resumed immediately;
+        /// otherwise it is appended to a state nothing will ever drain again and the caller
+        /// waits forever, still holding a file descriptor number the kernel is free to reuse.
+        var terminationError: Error?
+
         init(
             fileDescriptor: SocketDescriptor,
             manager: AsyncSocketManager,
