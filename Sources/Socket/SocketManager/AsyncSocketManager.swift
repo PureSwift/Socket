@@ -167,14 +167,37 @@ internal actor AsyncSocketManager: SocketManager {
         state.sockets[fileDescriptor] = nil
     }
     
+    /// Wait for readiness and run `body`, retrying if the readiness turns out to be stale.
+    ///
+    /// `pendingEvents` records that the socket was *reported* ready, and is only cleared by a
+    /// successful transfer. Two operations waiting on the same event can therefore both skip
+    /// waiting, and whichever runs second finds the socket no longer ready and fails with
+    /// `EWOULDBLOCK` — surfaced to the caller as "Resource temporarily unavailable" even though
+    /// nothing is actually wrong. Treat that as "not ready after all": forget the stale
+    /// readiness and wait for a fresh one.
+    nonisolated func perform<T>(
+        _ events: FileEvents,
+        for fileDescriptor: SocketDescriptor,
+        _ body: (SocketState) async throws -> T
+    ) async throws -> T {
+        while true {
+            let socket = try await wait(for: events, fileDescriptor: fileDescriptor)
+            do {
+                return try await body(socket)
+            }
+            catch let error as Errno where error == .wouldBlock || error == .resourceTemporarilyUnavailable {
+                await socket.clearPending(events)
+            }
+        }
+    }
+
     /// Write data to managed file descriptor.
     nonisolated func write(
         _ data: Data,
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int {
-        let socket = try await wait(for: .write, fileDescriptor: fileDescriptor)
         await log("Will write \(data.count) bytes to \(fileDescriptor)")
-        return try await socket.write(data)
+        return try await perform(.write, for: fileDescriptor) { try await $0.write(data) }
     }
     
     /// Read managed file descriptor.
@@ -182,18 +205,16 @@ internal actor AsyncSocketManager: SocketManager {
         _ length: Int,
         for fileDescriptor: SocketDescriptor
     ) async throws -> Data {
-        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
         await log("Will read \(length) bytes from \(fileDescriptor)")
-        return try await socket.read(length)
+        return try await perform(.read, for: fileDescriptor) { try await $0.read(length) }
     }
     
     nonisolated func sendMessage(
         _ data: Data,
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int {
-        let socket = try await wait(for: .write, fileDescriptor: fileDescriptor)
         await log("Will send message with \(data.count) bytes to \(fileDescriptor)")
-        return try await socket.sendMessage(data)
+        return try await perform(.write, for: fileDescriptor) { try await $0.sendMessage(data) }
     }
     
     nonisolated func sendMessage<Address: SocketAddress>(
@@ -201,18 +222,16 @@ internal actor AsyncSocketManager: SocketManager {
         to address: Address,
         for fileDescriptor: SocketDescriptor
     ) async throws -> Int {
-        let socket = try await wait(for: .write, fileDescriptor: fileDescriptor)
         await log("Will send message with \(data.count) bytes to \(fileDescriptor)")
-        return try await socket.sendMessage(data, to: address)
+        return try await perform(.write, for: fileDescriptor) { try await $0.sendMessage(data, to: address) }
     }
     
     nonisolated func receiveMessage(
         _ length: Int,
         for fileDescriptor: SocketDescriptor
     ) async throws -> Data {
-        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
         await log("Will receive message with \(length) bytes from \(fileDescriptor)")
-        return try await socket.receiveMessage(length)
+        return try await perform(.read, for: fileDescriptor) { try await $0.receiveMessage(length) }
     }
     
     nonisolated func receiveMessage<Address: SocketAddress>(
@@ -220,9 +239,8 @@ internal actor AsyncSocketManager: SocketManager {
         fromAddressOf addressType: Address.Type,
         for fileDescriptor: SocketDescriptor
     ) async throws -> (Data, Address) where Address: Sendable {
-        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
         await log("Will receive message with \(length) bytes from \(fileDescriptor)")
-        return try await socket.receiveMessage(length, fromAddressOf: addressType)
+        return try await perform(.read, for: fileDescriptor) { try await $0.receiveMessage(length, fromAddressOf: addressType) }
     }
     
     #if os(Linux) || os(Android) || canImport(Darwin)
@@ -235,9 +253,10 @@ internal actor AsyncSocketManager: SocketManager {
         // Copied to a Sendable buffer before crossing into the actor, because DataProtocol
         // carries no Sendable guarantee.
         let bytes = [UInt8](data)
-        let socket = try await wait(for: .write, fileDescriptor: fileDescriptor)
         await log("Will send message with \(bytes.count) bytes and \(fileDescriptors.count) file descriptors to \(fileDescriptor)")
-        return try await socket.sendMessage(bytes, fileDescriptors: fileDescriptors)
+        return try await perform(.write, for: fileDescriptor) {
+            try await $0.sendMessage(bytes, fileDescriptors: fileDescriptors)
+        }
     }
     
     /// Receive a message along with any `SCM_RIGHTS` file descriptors that accompany it.
@@ -246,9 +265,10 @@ internal actor AsyncSocketManager: SocketManager {
         maximumDescriptors: Int,
         for fileDescriptor: SocketDescriptor
     ) async throws -> SocketMessage {
-        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
         await log("Will receive message with \(length) bytes and up to \(maximumDescriptors) file descriptors from \(fileDescriptor)")
-        return try await socket.receiveMessage(length, maximumDescriptors: maximumDescriptors)
+        return try await perform(.read, for: fileDescriptor) {
+            try await $0.receiveMessage(length, maximumDescriptors: maximumDescriptors)
+        }
     }
     #endif
     
@@ -259,8 +279,7 @@ internal actor AsyncSocketManager: SocketManager {
     
     /// Accept a connection on a socket.
     nonisolated func accept(for fileDescriptor: SocketDescriptor) async throws -> SocketDescriptor {
-        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
-        return try await socket.accept()
+        return try await perform(.read, for: fileDescriptor) { try await $0.accept() }
     }
     
     /// Accept a connection on a socket.
@@ -634,6 +653,11 @@ fileprivate extension AsyncSocketManager.SocketState {
         }
     }
     
+    /// Forget a readiness that turned out to be stale, so the next wait is a real one.
+    func clearPending(_ events: FileEvents) {
+        pendingEvents.subtract(events)
+    }
+
     func isWaiting(for event: FileEvents) -> Bool {
         eventContinuation[event, default: []].isEmpty == false
     }
