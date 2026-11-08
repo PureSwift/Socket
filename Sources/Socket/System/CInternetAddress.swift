@@ -31,21 +31,23 @@ internal extension CInternetAddress {
 internal extension String {
     
     init<T: CInternetAddress>(_ cInternetAddress: T) throws(Errno) {
-        let cString = UnsafeMutablePointer<CChar>.allocate(capacity: T.stringLength)
-        defer { cString.deallocate() }
-        let success = withUnsafePointer(to: cInternetAddress) {
-            system_inet_ntop(
-                T.family.rawValue,
-                $0,
-                cString,
-                CInterop.SocketLength(T.stringLength)
-            ) != nil
+        let string = withUnsafeTemporaryAllocation(of: CChar.self, capacity: T.stringLength) { buffer -> String? in
+            let cString = buffer.baseAddress!
+            let success = withUnsafePointer(to: cInternetAddress) {
+                system_inet_ntop(
+                    T.family.rawValue,
+                    $0,
+                    cString,
+                    CInterop.SocketLength(T.stringLength)
+                ) != nil
+            }
+            return success ? String(cString: cString) : nil
         }
-        guard success else {
+        guard let string else {
             throw Errno.current
         }
-        
-        self.init(cString: cString)
+
+        self = string
     }
 }
 
