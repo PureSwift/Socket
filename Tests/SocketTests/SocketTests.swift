@@ -124,24 +124,53 @@ struct SocketTests {
         #expect(data == read)
         try await Task.sleep(nanoseconds: 2_000_000_000)
         await client.close()
-        // the connect notification races the single element buffer, it is
-        // replaced by the next event when the consumer has not read it yet
+        // whether the connect notification survives the single element buffer depends on timing
         let clientEvents = try await clientEventsTask.value.filter {
             if case .connection = $0 { return false } else { return true }
         }
         // the client never writes, so it is never notified of write readiness
-        #expect(clientEvents.count == 3)
-        #expect("\(clientEvents)" == "[Socket.Socket.Event.read, Socket.Socket.Event.didRead(41), Socket.Socket.Event.close]")
+        expectEvents(clientEvents, in: [.read, .didRead(data.count), .close])
         await server.close()
         let serverEvents = try await serverEventsTask.value
-        #expect(serverEvents.count == 2)
-        #expect("\(serverEvents)" == "[Socket.Socket.Event.connection, Socket.Socket.Event.close]")
+        expectEvents(serverEvents, in: [.connection, .close])
         let newConnectionEvents = try await newConnectionTask.value
         // write readiness is only reported for the pending write
-        #expect(newConnectionEvents.count == 4)
-        #expect("\(newConnectionEvents)" == "[Socket.Socket.Event.write, Socket.Socket.Event.didWrite(41), Socket.Socket.Event.read, Socket.Socket.Event.close]")
+        expectEvents(newConnectionEvents, in: [.write, .didWrite(data.count), .read, .close])
     }
-    
+
+    /// Check the events reported for a socket, as far as the event stream guarantees them.
+    ///
+    /// The stream only buffers the newest event, so a consumer that falls behind misses any
+    /// event that was replaced, and readiness can be reported again by a stale poll. Events
+    /// must come from `expected`, with transfers in order, but only the final `close` is
+    /// certain to arrive because nothing can replace it.
+    private func expectEvents(
+        _ events: [Socket.Event],
+        in expected: [Socket.Event],
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        func isReadiness(_ event: Socket.Event) -> Bool {
+            switch event {
+            case .connection, .read, .write:
+                return true
+            case .didRead, .didWrite, .error, .close:
+                return false
+            }
+        }
+        let reported = events.map { "\($0)" }
+        #expect(Set(reported).isSubset(of: expected.map { "\($0)" }), "\(reported)", sourceLocation: sourceLocation)
+        #expect(reported.last == "\(Socket.Event.close)", "\(reported)", sourceLocation: sourceLocation)
+        var remaining = expected.filter { !isReadiness($0) }.map { "\($0)" }[...]
+        let isOrdered = events.filter { !isReadiness($0) }.map { "\($0)" }.allSatisfy { event in
+            guard let index = remaining.firstIndex(of: event) else {
+                return false
+            }
+            remaining = remaining[(index + 1)...]
+            return true
+        }
+        #expect(isOrdered, "\(reported)", sourceLocation: sourceLocation)
+    }
+
     @Test("IPv4 UDP Socket Communication")
     func testIPv4UDPSocket() async throws {
         // let the kernel assign a free port, a hardcoded one may already be taken
