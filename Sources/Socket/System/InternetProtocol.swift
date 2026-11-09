@@ -28,7 +28,16 @@ extension IPAddress: RawRepresentable {
     
     public init?(rawValue: String) {
         
-        if let address = IPv4Address(rawValue: rawValue) {
+        // Text can only be valid for one version, so this order only avoids a wasted attempt.
+        if rawValue.utf8.contains(UInt8(ascii: ":")) {
+            if let address = IPv6Address(rawValue: rawValue) {
+                self = .v6(address)
+            } else if let address = IPv4Address(rawValue: rawValue) {
+                self = .v4(address)
+            } else {
+                return nil
+            }
+        } else if let address = IPv4Address(rawValue: rawValue) {
             self = .v4(address)
         } else if let address = IPv6Address(rawValue: rawValue) {
             self = .v6(address)
@@ -104,14 +113,18 @@ public extension IPv4Address {
 extension IPv4Address: RawRepresentable {
     
     public init?(rawValue: String) {
+        if let address = rawValue.utf8.withContiguousStorageIfAvailable(Self.parseCanonical) ?? nil {
+            self = address
+            return
+        }
         guard let bytes = CInterop.IPv4Address(rawValue) else {
             return nil
         }
         self.init(bytes)
     }
-    
+
     public var rawValue: String {
-        return try! String(bytes)
+        return canonicalText
     }
 }
 
