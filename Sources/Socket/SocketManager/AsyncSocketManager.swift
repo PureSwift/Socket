@@ -526,9 +526,19 @@ private extension AsyncSocketManager {
  
 extension AsyncSocketManager.SocketState {
     
+    /// The flags every send uses: `noSignal` where there is one, so a closed
+    /// peer is an error rather than a `SIGPIPE`.
+    static var sendFlags: MessageFlags {
+        #if os(Linux) || os(Android) || canImport(Darwin)
+        .noSignal
+        #else
+        []
+        #endif
+    }
+    
     #if os(Linux) || os(Android) || canImport(Darwin)
     func sendMessage(_ data: [UInt8], fileDescriptors: [SocketDescriptor]) throws -> Int {
-        let byteCount = try fileDescriptor.send(data, fileDescriptors: fileDescriptors)
+        let byteCount = try fileDescriptor.send(data, fileDescriptors: fileDescriptors, flags: Self.sendFlags)
         // notify
         didWrite(byteCount)
         return byteCount
@@ -542,9 +552,24 @@ extension AsyncSocketManager.SocketState {
     }
     #endif
     
+    /// Writes with `send` where it can, so a peer that has closed fails with
+    /// `brokenPipe` instead of killing the process with `SIGPIPE`.
     func write(_ data: Data) throws -> Int {
-        let byteCount = try data.withUnsafeBytes {
-            try fileDescriptor.write($0)
+        let byteCount = try data.withUnsafeBytes { buffer in
+            #if os(Linux) || os(Android) || canImport(Darwin)
+            guard buffer.isEmpty == false else {
+                return try fileDescriptor.write(buffer)
+            }
+            do {
+                return try fileDescriptor.send(buffer, flags: Self.sendFlags)
+            }
+            catch let error as Errno where error == .notSocket {
+                // not a socket, so there's no SIGPIPE to avoid
+                return try fileDescriptor.write(buffer)
+            }
+            #else
+            return try fileDescriptor.write(buffer)
+            #endif
         }
         // notify
         didWrite(byteCount)
@@ -553,7 +578,7 @@ extension AsyncSocketManager.SocketState {
     
     func sendMessage(_ data: Data) throws -> Int {
         let byteCount = try data.withUnsafeBytes {
-            try fileDescriptor.send($0)
+            try fileDescriptor.send($0, flags: Self.sendFlags)
         }
         // notify
         didWrite(byteCount)
@@ -562,7 +587,7 @@ extension AsyncSocketManager.SocketState {
     
     func sendMessage<Address: SocketAddress>(_ data: Data, to address: Address) throws -> Int {
         let byteCount = try data.withUnsafeBytes {
-            try fileDescriptor.send($0, to: address)
+            try fileDescriptor.send($0, to: address, flags: Self.sendFlags)
         }
         // notify
         didWrite(byteCount)

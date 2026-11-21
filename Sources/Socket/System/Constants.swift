@@ -482,7 +482,9 @@ internal var _MSG_RCVMORE: CInt { numericCast(MSG_RCVMORE) } /* Data remains in 
 
 @_alwaysEmitIntoClient
 internal var _MSG_NEEDSA: CInt { numericCast(MSG_NEEDSA) } /* Fail receive if socket address cannot be allocated */
+#endif
 
+#if os(Linux) || os(Android) || canImport(Darwin)
 @_alwaysEmitIntoClient
 internal var _MSG_NOSIGNAL: CInt { numericCast(MSG_NOSIGNAL) } /* do not generate SIGPIPE on EOF */
 #endif
