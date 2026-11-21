@@ -39,6 +39,13 @@ public extension MessageFlags {
     @_alwaysEmitIntoClient
     static var truncate: MessageFlags { MessageFlags(_MSG_TRUNC) }
     
+    #if os(Linux) || os(Android) || canImport(Darwin)
+    /// Don't raise `SIGPIPE` when the peer has closed a stream socket;
+    /// the send fails with ``Errno/brokenPipe`` instead.
+    @_alwaysEmitIntoClient
+    static var noSignal: MessageFlags { MessageFlags(_MSG_NOSIGNAL) }
+    #endif
+    
     #if os(Linux)
     /// The caller has more data to send.
     @_alwaysEmitIntoClient
@@ -66,6 +73,7 @@ extension MessageFlags
         (.truncate, ".truncate"),
         (.more, ".more"),
         (.confirm, ".confirm"),
+        (.noSignal, ".noSignal"),
       ]
       #else
       let descriptions: [(Element, StaticString)] = [
