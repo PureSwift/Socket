@@ -517,7 +517,7 @@ internal var _fd_set_count: Int {
 #elseif os(Linux) || os(FreeBSD) || os(Android)
 #if arch(x86_64) || arch(arm64) || arch(s390x) || arch(powerpc64) || arch(powerpc64le)
     return 32
-#elseif arch(i386) || arch(arm)
+#elseif arch(i386) || arch(arm) || arch(powerpc)
     return 16
 #else
 #error("This architecture isn't known. Add it to the 32-bit or 64-bit line.")
