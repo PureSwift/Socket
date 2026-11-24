@@ -12,10 +12,14 @@ public struct AsyncSocketConfiguration: Sendable {
     /// Log
     public var log: (@Sendable (String) -> ())?
     
-    /// Task priority for backgroud socket polling.
+    /// Task priority for handling socket events.
     public var monitorPriority: TaskPriority
     
-    /// Interval in nanoseconds for monitoring / polling socket.
+    /// Interval in nanoseconds for polling sockets where the kernel has no event queue,
+    /// and for retrying a connection that is still in progress.
+    ///
+    /// With `epoll` or `kqueue` sockets are not polled: a dedicated thread blocks until
+    /// one is ready, so readiness is handled as soon as the kernel reports it.
     public var monitorInterval: UInt64
     
     public init(
@@ -57,16 +61,18 @@ internal actor AsyncSocketManager: SocketManager {
 
     fileprivate var state = ManagerState()
 
-    fileprivate var eventQueue: PlatformEventQueue?
+    fileprivate var registry: EventRegistry?
     
     /// Events every socket is registered for.
     ///
-    /// Write readiness is not included. A connected socket is almost always writable, so a
-    /// standing registration would make every wait return immediately for every idle socket.
-    /// It is added on demand while a write is pending, see ``addInterest(_:for:)``.
+    /// Registrations are level triggered and the monitor blocks until one is ready, so a
+    /// condition that nothing clears would wake it over and over. Write readiness is therefore
+    /// not included: a connected socket is almost always writable, so it is added on demand
+    /// while a write is waiting, and read readiness is dropped while a read is already pending,
+    /// see ``SocketState/updateInterest()``. Urgent data is not included because nothing
+    /// reads it.
     internal static let monitoredEvents: FileEvents = [
         .read,
-        .readUrgent,
         .error,
         .hangup,
         .invalidRequest
@@ -104,25 +110,37 @@ internal actor AsyncSocketManager: SocketManager {
             log("Unable to set non blocking. \(error)")
             assertionFailure("Unable to set non blocking. \(error)")
         }
+        // create kernel event queue
+        if registry == nil {
+            do {
+                registry = try EventRegistry(maxEvents: 1024)
+            }
+            catch {
+                log("Unable to create event queue. \(error)")
+                assertionFailure("Unable to create event queue. \(error)")
+            }
+        }
+        // append socket with events continuation
+        var socket: SocketState?
+        let eventStream = Socket.Event.Stream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let newSocket = SocketState(
+                fileDescriptor: fileDescriptor,
+                manager: self,
+                registry: registry,
+                continuation: continuation
+            )
+            state.sockets[fileDescriptor] = newSocket
+            socket = newSocket
+        }
         // register with kernel event queue
         do {
-            if eventQueue == nil {
-                eventQueue = try PlatformEventQueue(maxEvents: 1024)
+            if let socket {
+                try registry?.register(fileDescriptor, events: Self.monitoredEvents, owner: socket)
             }
-            try eventQueue?.add(fileDescriptor, events: Self.monitoredEvents)
-            state.interests[fileDescriptor] = Self.monitoredEvents
         }
         catch {
             log("Unable to register socket for events. \(error)")
             assertionFailure("Unable to register socket for events. \(error)")
-        }
-        // append socket with events continuation
-        let eventStream = Socket.Event.Stream(bufferingPolicy: .bufferingNewest(1)) { continuation in
-            state.sockets[fileDescriptor] = SocketState(
-                fileDescriptor: fileDescriptor,
-                manager: self,
-                continuation: continuation
-            )
         }
         // start monitoring
         startMonitoring()
@@ -154,8 +172,7 @@ internal actor AsyncSocketManager: SocketManager {
         if detach {
             state.detached.insert(fileDescriptor)
         }
-        try? eventQueue?.remove(fileDescriptor)
-        state.interests[fileDescriptor] = nil
+        registry?.deregister(fileDescriptor)
         // cancel all pending actions
         Task(priority: .userInitiated) {
             await socket.dequeueAll(Errno.connectionAbort)
@@ -287,8 +304,7 @@ internal actor AsyncSocketManager: SocketManager {
         _ address: Address.Type,
         for fileDescriptor: SocketDescriptor
     ) async throws -> (fileDescriptor: SocketDescriptor, address: Address) where Address: Sendable {
-        let socket = try await wait(for: .read, fileDescriptor: fileDescriptor)
-        return try await socket.accept(address)
+        return try await perform(.read, for: fileDescriptor) { try await $0.accept(address) }
     }
     
     /// Initiate a connection on a socket.
@@ -297,9 +313,26 @@ internal actor AsyncSocketManager: SocketManager {
         for fileDescriptor: SocketDescriptor
     ) async throws {
         let socket = try await socket(for: fileDescriptor)
-        try await retry(sleep: state.configuration.monitorInterval) {
-            fileDescriptor._connect(to: address, retryOnInterrupt: true)
-        }.get()
+        // A connection in progress is checked again soon, then less often, up to the monitor interval.
+        let maximumInterval = await state.configuration.monitorInterval
+        var interval = min(1_000_000, maximumInterval)
+        var isInProgress = false
+        while true {
+            switch fileDescriptor._connect(to: address, retryOnInterrupt: true) {
+            case .success:
+                break
+            case .failure(.socketIsConnected) where isInProgress:
+                break // the connection in progress has completed
+            case let .failure(error) where error.isBlocking:
+                isInProgress = true
+                try await Task.sleep(nanoseconds: interval)
+                interval = min(interval * 2, maximumInterval)
+                continue
+            case let .failure(error):
+                throw error
+            }
+            break
+        }
         await socket.markEstablished()
         socket.continuation.yield(.connection)
     }
@@ -319,7 +352,13 @@ private extension AsyncSocketManager {
         log("Will start monitoring")
         state.isMonitoring = true
 
-        // Create top level task to monitor
+        // a kernel event queue can be waited on from a thread of its own
+        if PlatformEventQueue.isStateful, let registry {
+            startMonitorThread(registry)
+            return
+        }
+
+        // Create top level task to poll
         // MEMO: Using [weak self] instead of [unowned self] to work around a compiler bug.
         // This issue only occurs in CI environments, where using [unowned self] causes a compiler crash under certain conditions.
         Task.detached(priority: state.configuration.monitorPriority) { [weak self] in
@@ -327,6 +366,69 @@ private extension AsyncSocketManager {
         }
     }
     
+    /// Block in the kernel event queue on a dedicated thread, handling each batch of events as it arrives.
+    ///
+    /// The thread never polls: while every socket is quiet it stays blocked in the kernel, and
+    /// it outlives the sockets, so nothing has to stop it or start it again. Blocking in a task
+    /// would hold one of the few threads of Swift's cooperative pool, so it gets a thread of its own.
+    ///
+    /// Registrations are level triggered, so the thread waits for a batch to be handled, and the
+    /// interest of its sockets updated, before it waits again. Otherwise it would be woken right
+    /// away for the same events.
+    func startMonitorThread(_ registry: EventRegistry) {
+        let priority = state.configuration.monitorPriority
+        let thread = Thread { [weak self] in
+            var queue = registry.makeWaiter()
+            let handled = DispatchSemaphore(value: 0)
+            while true {
+                let batch: [SocketReadiness]
+                do {
+                    batch = try queue.wait(timeout: nil) { Array($0) }
+                }
+                catch {
+                    Task { [weak self] in
+                        await self?.monitorFailed(error)
+                    }
+                    return
+                }
+                AsyncSocketManager.wakeups.increment()
+                guard batch.isEmpty == false else {
+                    continue // woken without events
+                }
+                Task(priority: priority) { [weak self] in
+                    await self?.handle(batch)
+                    handled.signal()
+                }
+                handled.wait()
+            }
+        }
+        thread.name = "Socket Monitor"
+        thread.qualityOfService = .userInitiated
+        thread.start()
+    }
+
+    func monitorFailed(_ error: Error) {
+        log("Socket monitoring failed. \(error)")
+        assertionFailure("Socket monitoring failed. \(error)")
+        state.isMonitoring = false
+    }
+
+    /// Handle the events of one wait, and return once they have been applied.
+    func handle(_ batch: [SocketReadiness]) async {
+        var tasks = [Task<Void, Never>]()
+        tasks.reserveCapacity(batch.count)
+        for readiness in batch {
+            guard let socket = state.sockets[readiness.fileDescriptor] else {
+                continue // stale event for a removed descriptor
+            }
+            tasks.append(process(readiness, socket: socket))
+        }
+        for task in tasks {
+            await task.value
+        }
+    }
+
+    /// Poll on an interval, for a kernel without an event queue to block in.
     func run() async {
         var tasks = [Task<Void, Never>]()
         while self.state.isMonitoring {
@@ -360,27 +462,6 @@ private extension AsyncSocketManager {
         return state.sockets.keys.contains(fileDescriptor)
     }
 
-    /// Subscribe to additional events for a registered socket.
-    func addInterest(_ events: FileEvents, for fileDescriptor: SocketDescriptor) {
-        guard let current = state.interests[fileDescriptor] else { return }
-        setInterest(current.union(events), for: fileDescriptor)
-    }
-
-    /// Stop monitoring events that no longer have a pending operation.
-    func removeInterest(_ events: FileEvents, for fileDescriptor: SocketDescriptor) {
-        guard let current = state.interests[fileDescriptor] else { return }
-        setInterest(current.subtracting(events).union(Self.monitoredEvents), for: fileDescriptor)
-    }
-
-    private func setInterest(_ events: FileEvents, for fileDescriptor: SocketDescriptor) {
-        // skip the syscall when the mask is unchanged
-        guard state.interests[fileDescriptor] != events else { return }
-        state.interests[fileDescriptor] = events
-        do { try eventQueue?.update(fileDescriptor, events: events) }
-        catch { log("Unable to update events for \(fileDescriptor). \(error)") }
-    }
-
-
     nonisolated func wait(
         for events: FileEvents,
         fileDescriptor: SocketDescriptor
@@ -390,8 +471,6 @@ private extension AsyncSocketManager {
         guard await socket.pendingEvents.contains(events) == false else {
             return socket // execute immediately
         }
-        // subscribe to events that are not monitored by default, like write readiness
-        await addInterest(events, for: fileDescriptor)
         // store continuation to resume when event is polled
         try await withThrowingContinuation(for: fileDescriptor) { (continuation: SocketContinuation<(), Swift.Error>) -> () in
             // store pending continuation
@@ -416,23 +495,21 @@ private extension AsyncSocketManager {
     @discardableResult
     func poll(_ tasks: inout [Task<Void, Never>]) throws -> Bool {
         guard state.sockets.isEmpty == false else { return false }
-        var hasEvents = false
+        let batch: [SocketReadiness]
         do {
-            try eventQueue?.wait(timeout: 0) { buffer in
-                hasEvents = buffer.isEmpty == false
-                for readiness in buffer {
-                    guard let socket = state.sockets[readiness.fileDescriptor] else {
-                        continue // stale event for a removed descriptor
-                    }
-                    tasks.append(process(readiness, socket: socket))
-                }
-            }
+            batch = try registry?.poll() ?? []
         }
         catch {
             log("Unable to poll for events. \(error.localizedDescription)")
             throw error
         }
-        return hasEvents
+        for readiness in batch {
+            guard let socket = state.sockets[readiness.fileDescriptor] else {
+                continue // stale event for a removed descriptor
+            }
+            tasks.append(process(readiness, socket: socket))
+        }
+        return batch.isEmpty == false
     }
 
     func process(_ readiness: SocketReadiness, socket: AsyncSocketManager.SocketState) -> Task<Void, Never> {
@@ -442,11 +519,6 @@ private extension AsyncSocketManager {
             }
             if readiness.events.contains(.write) {
                 await socket.event(.write, notification: .write)
-                // unsubscribe once nothing is waiting to write, the socket stays
-                // writable and would otherwise report readiness on every wait
-                if await socket.isWaiting(for: .write) == false {
-                    removeInterest(.write, for: readiness.fileDescriptor)
-                }
             }
             // These tear the socket down, so they must not be applied to a different socket
             // that has since been given the same file descriptor number.
@@ -458,10 +530,11 @@ private extension AsyncSocketManager {
             }
             // A socket that has not yet been connected polls as POLLHUP, so acting on it here
             // would tear down a socket that is only moments away from being connected.
+            // The kernel reports a hangup whatever the socket is registered for, so such a
+            // socket is taken out of the queue until it is used, rather than waking the monitor
+            // over and over.
             if readiness.events.contains(.hangup) {
-                let isEstablished = await socket.isEstablished
-                let isListening = await socket.isListening
-                if isEstablished || isListening {
+                if await socket.parkIfUnconnected() == false {
                     hangup(readiness.fileDescriptor, socket: socket)
                 }
             }
@@ -486,6 +559,11 @@ private extension AsyncSocketManager {
     /// `ESHUTDOWN` from `socket(for:)`.
     func error(_ error: Errno, for fileDescriptor: SocketDescriptor, socket: SocketState) {
         guard isCurrent(socket, for: fileDescriptor) else { return }
+        // events are waited for on another thread, so the number may have been
+        // closed and reused by a new socket after the error was reported
+        if error == .connectionReset, stillReports(.error, fileDescriptor) == false {
+            return
+        }
         self.error(error, for: fileDescriptor)
     }
     
@@ -507,13 +585,18 @@ private extension AsyncSocketManager {
     /// `POLLHUP` is level triggered, so a genuine hangup is still reported here and is acted on
     /// as before; only the stale observation is filtered out.
     func stillHangsUp(_ fileDescriptor: SocketDescriptor) -> Bool {
-        // `.hangup` need not be requested: poll always reports it in `revents`.
+        stillReports(.hangup, fileDescriptor)
+    }
+
+    /// Whether the descriptor reports an error or hangup *now*, rather than when it was last polled.
+    func stillReports(_ event: FileEvents, _ fileDescriptor: SocketDescriptor) -> Bool {
+        // `.error` and `.hangup` need not be requested: poll always reports them in `revents`.
         guard let events = try? fileDescriptor._poll(
             events: [],
             timeout: 0,
             retryOnInterrupt: true
         ).get() else { return false }
-        return events.contains(.hangup)
+        return events.contains(event)
     }
     
     /// Whether the descriptor is still registered to this very socket, rather than to a newer
@@ -637,14 +720,19 @@ extension AsyncSocketManager.SocketState {
         try fileDescriptor.listen(backlog: backlog)
         isListening = true
         isEstablished = true
+        updateInterest()
     }
     
     func accept() throws -> SocketDescriptor {
-        try fileDescriptor.accept()
+        let connection = try fileDescriptor.accept()
+        didAccept()
+        return connection
     }
     
     func accept<Address: SocketAddress>(_ address: Address.Type) throws -> (SocketDescriptor, Address) {
-        try fileDescriptor.accept(address)
+        let connection = try fileDescriptor.accept(address)
+        didAccept()
+        return connection
     }
 }
 
@@ -653,18 +741,85 @@ fileprivate extension AsyncSocketManager.SocketState {
     func didRead(_ bytes: Int) {
         isEstablished = true
         pendingEvents.remove(.read)
+        updateInterest()
         continuation.yield(.didRead(bytes))
     }
     
     func didWrite(_ bytes: Int) {
         isEstablished = true
         pendingEvents.remove(.write)
+        updateInterest()
         continuation.yield(.didWrite(bytes))
+    }
+    
+    /// A connection was taken from the backlog, wait to be told of the next one.
+    func didAccept() {
+        pendingEvents.remove(.read)
+        updateInterest()
     }
     
     /// Record that the socket is connected, so a hangup on it is meaningful.
     func markEstablished() {
         isEstablished = true
+        updateInterest()
+    }
+    
+    /// Take a socket that reports a hangup before it was ever connected out of the event queue.
+    ///
+    /// The kernel reports the hangup of a new TCP socket whatever it is registered for, so the
+    /// monitor would otherwise be woken again as soon as it waits. The socket is registered
+    /// again once it is connected, listens, or an operation waits on it.
+    ///
+    /// No operation blocks on a socket that reports a hangup, so any that is already waiting is
+    /// let run first, to complete or fail with the socket's error. Taken out of the queue, the
+    /// socket would otherwise never wake it.
+    ///
+    /// - Returns: `false` if the socket is connected or listening, so the hangup is real.
+    func parkIfUnconnected() -> Bool {
+        guard isEstablished == false, isListening == false else {
+            return false
+        }
+        for event in eventContinuation.keys {
+            while let waiter = dequeue(event) {
+                waiter.resume()
+            }
+        }
+        isParked = true
+        updateInterest()
+        return true
+    }
+    
+    /// Register for the events something is waiting for, and no others.
+    ///
+    /// Registrations are level triggered, so an event that stays true, a pending read that has
+    /// not been consumed or a socket that is always writable, would wake the monitor on every
+    /// wait. Read readiness is registered unless a read is already pending, and write readiness
+    /// only while a write is waiting for it.
+    func updateInterest() {
+        guard let registry, terminationError == nil else {
+            return
+        }
+        var events: FileEvents? = nil
+        if isParked == false || isEstablished || isListening {
+            isParked = false
+            var interest = AsyncSocketManager.monitoredEvents
+            if pendingEvents.contains(.read) {
+                interest.remove(.read)
+            }
+            if isWaiting(for: .write), pendingEvents.contains(.write) == false {
+                interest.insert(.write)
+            }
+            events = interest
+        }
+        do {
+            try registry.setEvents(events, for: fileDescriptor, owner: self)
+        }
+        catch {
+            let fileDescriptor = self.fileDescriptor
+            Task { [manager] in
+                await manager.log("Unable to update events for \(fileDescriptor). \(error)")
+            }
+        }
     }
     
     func dequeueAll(_ error: Error) {
@@ -681,6 +836,7 @@ fileprivate extension AsyncSocketManager.SocketState {
     /// Forget a readiness that turned out to be stale, so the next wait is a real one.
     func clearPending(_ events: FileEvents) {
         pendingEvents.subtract(events)
+        updateInterest()
     }
 
     func isWaiting(for event: FileEvents) -> Bool {
@@ -698,6 +854,10 @@ fileprivate extension AsyncSocketManager.SocketState {
             return
         }
         eventContinuation[event, default: []].append(continuation)
+        // subscribe to events that are not monitored by default, like write readiness,
+        // and register a socket that was taken out of the queue again
+        isParked = false
+        updateInterest()
     }
     
     func dequeue(_ event: FileEvents) -> SocketContinuation<(), Error>? {
@@ -716,6 +876,8 @@ fileprivate extension AsyncSocketManager.SocketState {
             return
         }
         pendingEvents.insert(event)
+        // stop listening for a readiness that stays reported until it is consumed
+        updateInterest()
         continuation.yield(notification)
     }
 }
@@ -743,14 +905,33 @@ extension AsyncSocketManager {
 
 extension AsyncSocketManager {
     
+    /// How many times the monitor thread has returned from waiting, to check that it sleeps while sockets are quiet.
+    static let wakeups = WakeupCounter()
+    
+    final class WakeupCounter: @unchecked Sendable {
+        
+        private let lock = NSLock()
+        
+        private var count = 0
+        
+        var value: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return count
+        }
+        
+        func increment() {
+            lock.lock()
+            count += 1
+            lock.unlock()
+        }
+    }
+    
     struct ManagerState: Sendable {
         
         var configuration = AsyncSocketConfiguration()
         
         var sockets = [SocketDescriptor: SocketState]()
-
-        /// Events each socket is currently registered for.
-        var interests = [SocketDescriptor: FileEvents]()
 
         /// Sockets no longer monitored whose descriptor is still open.
         var detached = Set<SocketDescriptor>()
@@ -763,6 +944,8 @@ extension AsyncSocketManager {
         let fileDescriptor: SocketDescriptor
 
         unowned let manager: AsyncSocketManager
+        
+        let registry: EventRegistry?
         
         let continuation: Socket.Event.Stream.Continuation
         
@@ -777,6 +960,9 @@ extension AsyncSocketManager {
         /// A socket that has never been connected polls as POLLHUP on Linux, so a hangup can
         /// only be believed once the socket has actually been established.
         var isEstablished = false
+        
+        /// Whether the socket was taken out of the event queue, see ``parkIfUnconnected()``.
+        var isParked = false
 
         /// The error to resume any further waiter with, once the socket has been torn down.
         ///
@@ -790,10 +976,12 @@ extension AsyncSocketManager {
         init(
             fileDescriptor: SocketDescriptor,
             manager: AsyncSocketManager,
+            registry: EventRegistry?,
             continuation: Socket.Event.Stream.Continuation
         ) {
             self.fileDescriptor = fileDescriptor
             self.manager = manager
+            self.registry = registry
             self.continuation = continuation
         }
     }
